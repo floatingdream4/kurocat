@@ -193,8 +193,6 @@ export class DaFeiYuRenderer {
     if (this.annoy >= 0.62 && now >= this.angryUntil) {
       this.angryUntil = now + 3400;
       this.annoy = 0.25;
-      this.propKind = null;
-      this.nextPropAt = now + 12000 + Math.random() * 10000;
       this.bodyBob = Math.min(1.1, this.bodyBob + 0.9);
     }
   }
@@ -395,20 +393,22 @@ export class DaFeiYuRenderer {
       !isHappy &&
       (layout.mouseLeft || layout.mouseRight || now - layout.mouseActiveAt < 900);
 
-    // 0) Immersive movie mode: annoyance decay + randomly pulling out a cola or popcorn
+    // 0) Immersive movie mode: annoyance decay + the snack she is holding
     const watching = !layout.privacyMode && !layout.asleep && Boolean(layout.watching);
     this.annoy = Math.max(0, this.annoy - 0.14 * dt);
     if (watching) {
+      // She pulls a snack out 2s after the movie starts and keeps one in hand the whole time,
+      // swapping between cola and popcorn roughly every 30s (it is only tucked away while angry).
       if (!this.wasWatching) {
-        this.nextPropAt = now + 6000 + Math.random() * 8000;
-      }
-      if (this.propKind && now >= this.propUntil) {
         this.propKind = null;
-        this.nextPropAt = now + 18000 + Math.random() * 24000;
+        this.nextPropAt = now + 2000;
       }
-      if (!this.propKind && now >= this.nextPropAt && now >= this.angryUntil) {
+      if (!this.propKind && now >= this.nextPropAt) {
         this.propKind = Math.random() < 0.5 ? 'cola' : 'popcorn';
-        this.propUntil = now + 9000 + Math.random() * 6000;
+        this.propUntil = now + 26000 + Math.random() * 8000;
+      } else if (this.propKind && now >= this.propUntil) {
+        this.propKind = this.propKind === 'cola' ? 'popcorn' : 'cola';
+        this.propUntil = now + 26000 + Math.random() * 8000;
       }
     } else {
       this.propKind = null;

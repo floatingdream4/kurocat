@@ -3,7 +3,8 @@
 //! Reports `active = true` while the foreground window is a true fullscreen window (its rectangle
 //! matches its monitor exactly) that belongs to a browser, a video player or a slideshow app.
 //! Read-only foreground window/executable metadata query ONLY, same as `game_detect`.
-//! Emits `kuro-media-active` to the frontend; ~2s poll interval, ~4s enter/leave hysteresis.
+//! Emits `kuro-media-active` to the frontend; 1s poll interval, enters on the first positive tick
+//! and leaves after ~4s of consecutive negative ticks.
 
 use serde::Serialize;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -66,34 +67,33 @@ pub fn is_media_exe(exe_path: &str) -> bool {
 pub fn start_media_detection_watcher(app: AppHandle, paused_guard: Arc<AtomicBool>) {
     std::thread::spawn(move || {
         let mut active = false;
-        let mut on_streak: u8 = 0;
         let mut off_streak: u8 = 0;
-        // Two consecutive ticks (~4s) are required both to enter and to leave, so a quick
-        // Alt-Tab or a momentary fullscreen flash never flickers the 3D glasses on and off.
-        const STREAK_TICKS: u8 = 2;
+        // Entering is immediate (first positive tick, <=1s). Leaving needs ~4s of consecutive
+        // negative ticks, so a quick Alt-Tab never flickers the 3D glasses off and back on.
+        const LEAVE_TICKS: u8 = 4;
+        #[cfg(windows)]
+        let mut probe = win_impl::MediaProbe::default();
 
         loop {
-            std::thread::sleep(Duration::from_millis(2000));
+            std::thread::sleep(Duration::from_millis(1000));
 
             let enabled = !paused_guard.load(Ordering::Relaxed);
 
             #[cfg(windows)]
-            let detected = enabled && win_impl::foreground_is_fullscreen_media();
+            let detected = enabled && win_impl::foreground_is_fullscreen_media(&mut probe);
             #[cfg(not(windows))]
             let detected = false;
 
             if detected {
                 off_streak = 0;
-                on_streak = on_streak.saturating_add(1);
-                if !active && on_streak >= STREAK_TICKS {
+                if !active {
                     active = true;
                     let _ = app.emit("kuro-media-active", MediaActivePayload { active: true });
                 }
             } else {
-                on_streak = 0;
                 if active {
                     off_streak = off_streak.saturating_add(1);
-                    if off_streak >= STREAK_TICKS || !enabled {
+                    if off_streak >= LEAVE_TICKS || !enabled {
                         active = false;
                         off_streak = 0;
                         let _ =
@@ -108,29 +108,56 @@ pub fn start_media_detection_watcher(app: AppHandle, paused_guard: Arc<AtomicBoo
 #[cfg(windows)]
 mod win_impl {
     use super::is_media_exe;
-    use windows_sys::Win32::Foundation::{CloseHandle, RECT};
+    use windows_sys::Win32::Foundation::{CloseHandle, HWND, RECT};
     use windows_sys::Win32::Graphics::Gdi::{
         GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST,
     };
     use windows_sys::Win32::System::Threading::{
-        OpenProcess, QueryFullProcessImageNameW, PROCESS_QUERY_LIMITED_INFORMATION,
+        GetCurrentProcessId, OpenProcess, QueryFullProcessImageNameW,
+        PROCESS_QUERY_LIMITED_INFORMATION,
     };
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        GetForegroundWindow, GetWindowRect, GetWindowThreadProcessId,
+        GetForegroundWindow, GetWindowRect, GetWindowThreadProcessId, IsWindow,
     };
+
+    /// Remembers the last fullscreen media window, so clicking the pet itself (which makes
+    /// KuroCat the foreground window) does not end the movie mode while that window is still
+    /// fullscreen behind her.
+    #[derive(Default)]
+    pub struct MediaProbe {
+        last_media_hwnd: isize,
+    }
 
     /// A maximized window overshoots its monitor by the resize border (~8px) and stops at the
     /// taskbar, while a real fullscreen window (F11, video fullscreen, slideshow) matches the
     /// monitor rectangle exactly. Requiring an exact match keeps ordinary maximized browsing out.
     const EDGE_TOLERANCE_PX: i32 = 2;
 
-    pub fn foreground_is_fullscreen_media() -> bool {
+    pub fn foreground_is_fullscreen_media(probe: &mut MediaProbe) -> bool {
         unsafe {
             let fg = GetForegroundWindow();
             if fg.is_null() {
                 return false;
             }
 
+            let mut fg_pid: u32 = 0;
+            GetWindowThreadProcessId(fg, &mut fg_pid);
+            if fg_pid != 0 && fg_pid == GetCurrentProcessId() {
+                // The pet (or its menu) took focus: judge by the remembered media window instead.
+                let remembered = probe.last_media_hwnd as HWND;
+                return probe.last_media_hwnd != 0
+                    && IsWindow(remembered) != 0
+                    && window_is_fullscreen_media(remembered);
+            }
+
+            let is_media = window_is_fullscreen_media(fg);
+            probe.last_media_hwnd = if is_media { fg as isize } else { 0 };
+            is_media
+        }
+    }
+
+    fn window_is_fullscreen_media(fg: HWND) -> bool {
+        unsafe {
             let mut wr: RECT = std::mem::zeroed();
             if GetWindowRect(fg, &mut wr) == 0 {
                 return false;
