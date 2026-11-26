@@ -566,7 +566,7 @@ export class DaFeiYuRenderer {
             (x >= 96 && x <= 122 && y <= 137) || (x >= 100 && x <= 118 && y <= 141);
           const inOuterHair = (x <= 69 || x >= 149) && y <= 145;
           const isHairPixel =
-            a > 90 && ((r < 175 && b >= r - 6) || (r < 125 && g < 120 && b < 165));
+            a > 90 && (r - b > 70 || (r < 125 && g < 120 && b < 165));
           if (!((inCenterBangs || inOuterHair) && isHairPixel)) {
             d[idx + 3] = 0;
           }
@@ -692,23 +692,23 @@ export class DaFeiYuRenderer {
       const irx = e.irx;
       const iry = e.iry;
 
-      ctx.fillStyle = '#1a2446';
+      ctx.fillStyle = '#46240f';
       ctx.beginPath();
       ctx.ellipse(icx, icy, irx, iry, 0, 0, Math.PI * 2);
       ctx.fill();
 
       const irisGrad = ctx.createLinearGradient(icx, icy - iry * 0.92, icx, icy + iry * 0.92);
-      irisGrad.addColorStop(0.0, '#162654');
-      irisGrad.addColorStop(0.36, '#28407c');
-      irisGrad.addColorStop(0.66, '#5898ca');
-      irisGrad.addColorStop(0.88, '#b6e4f6');
-      irisGrad.addColorStop(1.0, '#90b8cc');
+      irisGrad.addColorStop(0.0, '#542a10');
+      irisGrad.addColorStop(0.36, '#8a4416');
+      irisGrad.addColorStop(0.66, '#e08a3c');
+      irisGrad.addColorStop(0.88, '#ffd9a0');
+      irisGrad.addColorStop(1.0, '#e0b080');
       ctx.fillStyle = irisGrad;
       ctx.beginPath();
       ctx.ellipse(icx, icy, irx * 0.91, iry * 0.91, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      ctx.fillStyle = 'rgba(164, 226, 248, 0.62)';
+      ctx.fillStyle = 'rgba(255, 214, 150, 0.62)';
       ctx.beginPath();
       ctx.ellipse(icx, icy + iry * 0.44, irx * 0.62, iry * 0.30, 0, 0, Math.PI * 2);
       ctx.fill();
@@ -718,17 +718,17 @@ export class DaFeiYuRenderer {
       const pcy = icy + gazeY * 0.22 - 0.4;
       const prx = irx * 0.42;
       const pry = iry * 0.46;
-      ctx.fillStyle = 'rgba(10, 30, 74, 0.92)';
+      ctx.fillStyle = 'rgba(70, 30, 8, 0.92)';
       ctx.beginPath();
       ctx.ellipse(pcx, pcy, prx, pry, 0, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = 'rgba(4, 18, 52, 0.96)';
+      ctx.fillStyle = 'rgba(46, 18, 4, 0.96)';
       ctx.beginPath();
       ctx.ellipse(pcx, pcy, prx * 0.52, pry * 0.52, 0, 0, Math.PI * 2);
       ctx.fill();
 
       // Soft upper-lash shadow across top of iris
-      ctx.fillStyle = 'rgba(18, 28, 64, 0.40)';
+      ctx.fillStyle = 'rgba(64, 28, 14, 0.40)';
       ctx.beginPath();
       ctx.ellipse(icx, icy - iry * 0.72, irx * 0.95, iry * 0.48, 0, 0, Math.PI * 2);
       ctx.fill();
@@ -868,7 +868,7 @@ export class DaFeiYuRenderer {
     for (const rp of this.ripples) {
       ctx.save();
       ctx.globalAlpha = rp.life * 0.82;
-      ctx.strokeStyle = '#67d8ff';
+      ctx.strokeStyle = '#ffb866';
       ctx.lineWidth = 2.4;
       ctx.beginPath();
       ctx.ellipse(rp.x, rp.y, rp.r, rp.r * 0.55, 0, 0, Math.PI * 2);
@@ -1034,7 +1034,7 @@ export class DaFeiYuRenderer {
 
     if (layer === 'front' && slapPhase > 0.25) {
       ctx.save();
-      ctx.fillStyle = 'rgba(20, 40, 88, 0.22)';
+      ctx.fillStyle = 'rgba(88, 40, 16, 0.22)';
       ctx.beginPath();
       ctx.ellipse(tipX, tipY + 6, 22, 13, 0, 0, Math.PI * 2);
       ctx.fill();
@@ -1042,10 +1042,10 @@ export class DaFeiYuRenderer {
     }
 
     const stemGrad = ctx.createLinearGradient(rootX, rootY, tipX, tipY);
-    stemGrad.addColorStop(0, 'rgba(24, 34, 68, 0.92)');
-    stemGrad.addColorStop(0.18, '#1d3269');
-    stemGrad.addColorStop(0.55, '#2957a4');
-    stemGrad.addColorStop(1, '#52b2eb');
+    stemGrad.addColorStop(0, 'rgba(70, 34, 16, 0.92)');
+    stemGrad.addColorStop(0.18, '#7a3a12');
+    stemGrad.addColorStop(0.55, '#c9642a');
+    stemGrad.addColorStop(1, '#f2a25a');
 
     ctx.beginPath();
     ctx.moveTo(
@@ -1063,7 +1063,7 @@ export class DaFeiYuRenderer {
     ctx.fill();
 
     const edgeStart = Math.max(1, startIdx);
-    ctx.strokeStyle = '#16203d';
+    ctx.strokeStyle = '#3a2418';
     ctx.lineWidth = 2.4;
     ctx.beginPath();
     for (let i = edgeStart; i < pts.length; i++) {
@@ -1083,7 +1083,7 @@ export class DaFeiYuRenderer {
     ctx.stroke();
 
     const hlStart = Math.max(2, startIdx);
-    ctx.strokeStyle = 'rgba(170, 232, 255, 0.48)';
+    ctx.strokeStyle = 'rgba(255, 226, 180, 0.48)';
     ctx.lineWidth = 3.0;
     ctx.beginPath();
     for (let i = hlStart; i < pts.length; i++) {
@@ -1107,13 +1107,13 @@ export class DaFeiYuRenderer {
     ctx.scale(scaleMult * (1 + sq * 0.16), scaleMult * (1 - sq * 0.10));
 
     const flukeGrad = ctx.createRadialGradient(-6, 0, 2, 4, 0, 28);
-    flukeGrad.addColorStop(0, '#96ecff');
-    flukeGrad.addColorStop(0.38, '#4ba8e6');
-    flukeGrad.addColorStop(0.78, '#26539e');
-    flukeGrad.addColorStop(1, '#182f68');
+    flukeGrad.addColorStop(0, '#ffe0b0');
+    flukeGrad.addColorStop(0.38, '#f2a25a');
+    flukeGrad.addColorStop(0.78, '#c9642a');
+    flukeGrad.addColorStop(1, '#7a3a12');
 
     ctx.fillStyle = flukeGrad;
-    ctx.strokeStyle = '#151f3b';
+    ctx.strokeStyle = '#3a2418';
     ctx.lineWidth = 2.4;
     ctx.beginPath();
     ctx.moveTo(-13, -4);
@@ -1125,7 +1125,7 @@ export class DaFeiYuRenderer {
     ctx.fill();
     ctx.stroke();
 
-    ctx.strokeStyle = 'rgba(215, 248, 255, 0.65)';
+    ctx.strokeStyle = 'rgba(255, 240, 215, 0.65)';
     ctx.lineWidth = 1.6;
     ctx.beginPath();
     ctx.moveTo(-8, -2);
@@ -1138,7 +1138,7 @@ export class DaFeiYuRenderer {
     ctx.quadraticCurveTo(1, 6, 8, 9);
     ctx.stroke();
 
-    ctx.fillStyle = 'rgba(230, 252, 255, 0.55)';
+    ctx.fillStyle = 'rgba(255, 244, 225, 0.55)';
     ctx.beginPath();
     ctx.ellipse(-4, -7, 4.2, 2.2, -0.45, 0, Math.PI * 2);
     ctx.fill();
@@ -1180,9 +1180,9 @@ export class DaFeiYuRenderer {
 
     ctx.save();
     const grad = ctx.createLinearGradient(sx, sy, wx, wy);
-    grad.addColorStop(0, '#1f223b');
-    grad.addColorStop(0.65, '#272b4b');
-    grad.addColorStop(1, '#31365e');
+    grad.addColorStop(0, '#1c1a1a');
+    grad.addColorStop(0.65, '#262220');
+    grad.addColorStop(1, '#332c28');
 
     ctx.beginPath();
     ctx.moveTo(sx + nx * rSh, sy + ny * rSh);
@@ -1197,7 +1197,7 @@ export class DaFeiYuRenderer {
     ctx.arc(sx, sy, rSh, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.strokeStyle = '#181a2e';
+    ctx.strokeStyle = '#141211';
     ctx.lineWidth = 2.4;
     ctx.lineCap = 'round';
     ctx.beginPath();
@@ -1227,7 +1227,7 @@ export class DaFeiYuRenderer {
     ctx.translate(wx, wy);
     ctx.rotate(ang + Math.PI / 2);
     ctx.fillStyle = '#f8f9fe';
-    ctx.strokeStyle = '#252844';
+    ctx.strokeStyle = '#2a2420';
     ctx.lineWidth = 1.8;
     for (let i = -2; i <= 2; i++) {
       ctx.beginPath();
