@@ -8,6 +8,7 @@ mod input_hook;
 #[cfg(target_os = "macos")]
 mod macos_window;
 mod mcp;
+mod media_detect;
 mod obs;
 mod privacy;
 mod tray;
@@ -2897,6 +2898,7 @@ pub fn run() {
                 settings_for_setup.clone(),
                 paused_for_setup.clone(),
             );
+            media_detect::start_media_detection_watcher(handle.clone(), paused_for_setup.clone());
             start_hit_test_loop(
                 handle.clone(),
                 settings_for_setup,

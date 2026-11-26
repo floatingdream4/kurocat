@@ -1264,6 +1264,10 @@ async function bootstrap(): Promise<void> {
     // non-Tauri or older backend
   }
 
+  await listen<{ active?: boolean }>('kuro-media-active', (ev) => {
+    engine.setMediaActive(Boolean(ev.payload?.active));
+  });
+
   await listen<{ active?: boolean; gameName?: string | null }>('kuro-game-active', (ev) => {
     gameActive = Boolean(ev.payload?.active);
     const wearNow = shouldWearHeadphonesNow();

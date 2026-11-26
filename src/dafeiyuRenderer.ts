@@ -2,6 +2,15 @@ import idleUrl from './assets/dafeiyu/notail_idle.png';
 import blinkUrl from './assets/dafeiyu/notail_blink.png';
 import shyUrl from './assets/dafeiyu/notail_shy.png';
 import happyUrl from './assets/dafeiyu/notail_happy2.png';
+import curiousUrl from './assets/dafeiyu/notail_curious.png';
+import sleepUrl from './assets/dafeiyu/notail_sleep.png';
+import watchUrl from './assets/dafeiyu/notail_watch.png';
+import angryUrl from './assets/dafeiyu/notail_angry.png';
+import colaUrl from './assets/dafeiyu/prop_cola.png';
+import popcornUrl from './assets/dafeiyu/prop_popcorn.png';
+
+type DaFeiYuExpr = 'idle' | 'blink' | 'shy' | 'happy' | 'curious' | 'sleep' | 'watch' | 'angry';
+type DaFeiYuProp = 'cola' | 'popcorn';
 
 export interface DaFeiYuLayout {
   logicalW: number;
@@ -22,6 +31,10 @@ export interface DaFeiYuLayout {
   privacyMode: boolean;
   privacyTypingAt: number;
   is108: boolean;
+  /** True after a long system-wide idle period (or an agent 'sleep' action) until the next input. */
+  asleep?: boolean;
+  /** True while a fullscreen video / slideshow is in the foreground (3D glasses + snacks mode). */
+  watching?: boolean;
 }
 
 interface HandState {
@@ -59,7 +72,18 @@ interface FloatingParticle {
  * support, and adorable hands-covering-eyes password privacy mode.
  */
 export class DaFeiYuRenderer {
-  private sprites: Record<'idle' | 'blink' | 'shy' | 'happy', HTMLImageElement> | null = null;
+  private sprites: Record<DaFeiYuExpr, HTMLImageElement> | null = null;
+  // Agent-companion curious state (sparkly-eyed frame + head tilt + floating '?')
+  private curiousSince = -10000;
+  // Immersive movie mode: annoyance from being disturbed, and the snack she is currently holding
+  private annoy = 0;
+  private angryUntil = -10000;
+  private wasWatching = false;
+  private propKind: DaFeiYuProp | null = null;
+  private propUntil = -10000;
+  private nextPropAt = 0;
+  private props: Record<DaFeiYuProp, HTMLImageElement> | null = null;
+  private curiousUntil = -10000;
   private hairBangsCanvas: HTMLCanvasElement | null = null;
   private hairBangsAttempted = false;
 
@@ -128,7 +152,7 @@ export class DaFeiYuRenderer {
     // Sprites are lazy-loaded on first render so default cat skins never decode 4 PNGs into RAM.
   }
 
-  private ensureSprites(): Record<'idle' | 'blink' | 'shy' | 'happy', HTMLImageElement> {
+  private ensureSprites(): Record<DaFeiYuExpr, HTMLImageElement> {
     if (!this.sprites) {
       const mk = (src: string) => {
         const img = new Image();
@@ -141,12 +165,47 @@ export class DaFeiYuRenderer {
         blink: mk(blinkUrl),
         shy: mk(shyUrl),
         happy: mk(happyUrl),
+        curious: mk(curiousUrl),
+        sleep: mk(sleepUrl),
+        watch: mk(watchUrl),
+        angry: mk(angryUrl),
       };
     }
     return this.sprites;
   }
 
+  private ensureProps(): Record<DaFeiYuProp, HTMLImageElement> {
+    if (!this.props) {
+      const mk = (src: string) => {
+        const img = new Image();
+        img.decoding = 'async';
+        img.src = src;
+        return img;
+      };
+      this.props = { cola: mk(colaUrl), popcorn: mk(popcornUrl) };
+    }
+    return this.props;
+  }
+
+  /** Being poked or typed at while she is watching a movie builds annoyance; enough of it makes her angry for a few seconds. */
+  public disturb(amount: number, now: number): void {
+    this.annoy = Math.min(1, this.annoy + amount);
+    if (this.annoy >= 0.62 && now >= this.angryUntil) {
+      this.angryUntil = now + 3400;
+      this.annoy = 0.25;
+      this.propKind = null;
+      this.nextPropAt = now + 12000 + Math.random() * 10000;
+      this.bodyBob = Math.min(1.1, this.bodyBob + 0.9);
+    }
+  }
+
   public releaseSprites(): void {
+    if (this.props) {
+      for (const img of Object.values(this.props)) {
+        img.src = '';
+      }
+      this.props = null;
+    }
     if (this.sprites) {
       for (const img of Object.values(this.sprites)) {
         img.src = '';
@@ -168,6 +227,21 @@ export class DaFeiYuRenderer {
       this.tail.heldVks.clear();
       this.ripples.length = 0;
     }
+  }
+
+  /** Show the curious expression until `untilMs` (performance.now() clock). */
+  public setCurious(untilMs: number): void {
+    const now = performance.now();
+    if (now >= this.curiousUntil) this.curiousSince = now;
+    this.curiousUntil = untilMs;
+  }
+
+  public clearCurious(): void {
+    this.curiousUntil = -10000;
+  }
+
+  public isCurious(now: number): boolean {
+    return now < this.curiousUntil;
   }
 
   public onPrivacyTyping(): void {
@@ -321,6 +395,28 @@ export class DaFeiYuRenderer {
       !isHappy &&
       (layout.mouseLeft || layout.mouseRight || now - layout.mouseActiveAt < 900);
 
+    // 0) Immersive movie mode: annoyance decay + randomly pulling out a cola or popcorn
+    const watching = !layout.privacyMode && !layout.asleep && Boolean(layout.watching);
+    this.annoy = Math.max(0, this.annoy - 0.14 * dt);
+    if (watching) {
+      if (!this.wasWatching) {
+        this.nextPropAt = now + 6000 + Math.random() * 8000;
+      }
+      if (this.propKind && now >= this.propUntil) {
+        this.propKind = null;
+        this.nextPropAt = now + 18000 + Math.random() * 24000;
+      }
+      if (!this.propKind && now >= this.nextPropAt && now >= this.angryUntil) {
+        this.propKind = Math.random() < 0.5 ? 'cola' : 'popcorn';
+        this.propUntil = now + 9000 + Math.random() * 6000;
+      }
+    } else {
+      this.propKind = null;
+      this.angryUntil = -10000;
+      this.annoy = 0;
+    }
+    this.wasWatching = watching;
+
     // 1) Calm 2.8s typing-speed window + hysteresis-locked blush mood (min 2.2s dwell, zero flicker!)
     while (this.keyTimes.length && now - this.keyTimes[0] > 2800) {
       this.keyTimes.shift();
@@ -392,7 +488,13 @@ export class DaFeiYuRenderer {
       this.bodyDiveY += (8 - this.bodyDiveY) * (1 - Math.exp(-10 * dt));
     } else if (!isTyping) {
       this.bodyShiftTarget = 0;
-      this.bodyTiltTarget = 0;
+      this.bodyTiltTarget = layout.asleep
+        ? 0.055
+        : watching && now < this.angryUntil
+          ? Math.sin(now * 0.045) * 0.035
+          : !isHappy && !watching && now < this.curiousUntil
+            ? 0.07
+            : 0;
       this.bodyDiveY *= Math.exp(-9 * dt);
     } else {
       this.bodyDiveY *= Math.exp(-9 * dt);
@@ -506,7 +608,9 @@ export class DaFeiYuRenderer {
   private computeGeom(now: number, layout: DaFeiYuLayout) {
     const charX = layout.is108 ? 268 : 192;
     const baseCharY = layout.is108 ? 366 : 364;
-    const breath = Math.sin(now * 0.0034) * 2.2 + this.bodyBob * 3.8 + this.bodyDiveY;
+    // Slower, deeper breathing while asleep
+    const breathWave = layout.asleep ? Math.sin(now * 0.0016) * 3.2 : Math.sin(now * 0.0034) * 2.2;
+    const breath = breathWave + this.bodyBob * 3.8 + this.bodyDiveY;
     const charCenterX = charX + this.bodyShiftX;
     const charBaseY = baseCharY + breath;
     const drawW = layout.is108 ? 268 : 262;
@@ -783,9 +887,17 @@ export class DaFeiYuRenderer {
       'back',
     );
 
-    let exprKey: 'idle' | 'blink' | 'shy' | 'happy' = 'idle';
+    const isAsleep = !layout.privacyMode && !isHappy && Boolean(layout.asleep);
+    const isWatching = !layout.privacyMode && !layout.asleep && Boolean(layout.watching);
+    const isCurious =
+      !layout.privacyMode && !isHappy && !isAsleep && !isWatching && now < this.curiousUntil;
+    let exprKey: DaFeiYuExpr = 'idle';
     if (layout.privacyMode) exprKey = 'blink';
-    else if (isHappy || this.moodTier === 2) exprKey = 'happy';
+    else if (isAsleep) exprKey = 'sleep';
+    else if (isWatching) exprKey = now < this.angryUntil ? 'angry' : 'watch';
+    else if (isHappy) exprKey = 'happy';
+    else if (isCurious) exprKey = 'curious';
+    else if (this.moodTier === 2) exprKey = 'happy';
     else if (this.moodTier === 1) exprKey = 'shy';
     else if (isBlinking) exprKey = 'blink';
 
@@ -859,6 +971,79 @@ export class DaFeiYuRenderer {
     const tailRoot = g.spritePointToWorld(0.56, 0.785);
 
     const isHappy = !layout.privacyMode && layout.petEnergy > 0.25;
+    const watching = !layout.privacyMode && !layout.asleep && Boolean(layout.watching);
+
+    // 0) Floating '?' beside her head while curious (agent working / thinking / waiting)
+    if (!layout.privacyMode && !isHappy && layout.asleep) {
+      // Floating 'z z Z' drifting up from her head while asleep
+      const zp = g.spritePointToWorld(0.82, 0.2);
+      ctx.save();
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.lineJoin = 'round';
+      for (let i = 0; i < 3; i++) {
+        const ph = (now / 2600 + i / 3) % 1;
+        const size = 13 + ph * 13;
+        ctx.globalAlpha = Math.max(0, Math.min(1, ph * 5) * (1 - ph) * 1.15);
+        ctx.font = `900 ${size.toFixed(1)}px "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif`;
+        const zx = zp.x + ph * 26 + Math.sin(ph * 6.2 + i) * 4;
+        const zy = zp.y - ph * 46;
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = '#3a2418';
+        ctx.strokeText('z', zx, zy);
+        ctx.fillStyle = '#fff4e1';
+        ctx.fillText('z', zx, zy);
+      }
+      ctx.restore();
+    } else if (watching && now < this.angryUntil) {
+      // Pulsing comic anger mark beside her head
+      const ap = g.spritePointToWorld(0.2, 0.2);
+      const pulse = 1 + Math.sin(now * 0.02) * 0.12;
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, (this.angryUntil - now) / 300);
+      ctx.translate(ap.x, ap.y);
+      ctx.scale(pulse, pulse);
+      ctx.lineCap = 'round';
+      for (const [width, color] of [
+        [6.2, '#3a2418'],
+        [3.2, '#ff5a4f'],
+      ] as const) {
+        ctx.lineWidth = width;
+        ctx.strokeStyle = color;
+        for (let i = 0; i < 4; i++) {
+          ctx.save();
+          ctx.rotate((i * Math.PI) / 2);
+          ctx.beginPath();
+          ctx.moveTo(3.5, 10);
+          ctx.quadraticCurveTo(3.5, 3.5, 10, 3.5);
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
+      ctx.restore();
+    } else if (!layout.privacyMode && !isHappy && !watching && now < this.curiousUntil) {
+      const fadeIn = Math.min(1, (now - this.curiousSince) / 260);
+      const fadeOut = Math.min(1, (this.curiousUntil - now) / 320);
+      const alpha = Math.max(0, Math.min(fadeIn, fadeOut));
+      const pop = 0.7 + 0.3 * fadeIn;
+      const qp = g.spritePointToWorld(0.86, 0.15);
+      const bob = Math.sin(now * 0.0052) * 3.2;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.translate(qp.x, qp.y + bob);
+      ctx.rotate(0.2 + Math.sin(now * 0.0031) * 0.08);
+      ctx.scale(pop, pop);
+      ctx.font = '900 30px "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.lineJoin = 'round';
+      ctx.lineWidth = 5;
+      ctx.strokeStyle = '#3a2418';
+      ctx.strokeText('?', 0, 0);
+      ctx.fillStyle = '#ffb866';
+      ctx.fillText('?', 0, 0);
+      ctx.restore();
+    }
     const mouseMode =
       !layout.privacyMode &&
       !isHappy &&
@@ -907,6 +1092,7 @@ export class DaFeiYuRenderer {
     let lTargetY: number;
     let rTargetX: number;
     let rTargetY: number;
+    let heldProp: DaFeiYuProp | null = null;
     if (layout.privacyMode) {
       const eyeL = g.spritePointToWorld(0.390, 0.476);
       const eyeR = g.spritePointToWorld(0.598, 0.476);
@@ -936,6 +1122,12 @@ export class DaFeiYuRenderer {
       if (rightTyping) {
         rTargetX = this.rightHand.tx;
         rTargetY = this.rightHand.ty;
+      } else if (watching && this.propKind && now >= this.angryUntil) {
+        // Holding a snack: hand rests at chest height and lifts toward her mouth now and then
+        const sip = Math.max(0, Math.sin(now * 0.0021)) ** 2;
+        rTargetX = shR.x + 26;
+        rTargetY = shR.y + 14 - sip * 12;
+        heldProp = this.propKind;
       } else {
         rTargetX = shR.x + 15;
         rTargetY = shR.y + 34;
@@ -971,6 +1163,15 @@ export class DaFeiYuRenderer {
       this.rightHand.squash,
       mouseMode ? 86 : 72,
     );
+
+    if (heldProp) {
+      const img = this.ensureProps()[heldProp];
+      if (img.complete && img.naturalWidth > 0) {
+        const ph = 50;
+        const pw = (ph * img.naturalWidth) / img.naturalHeight;
+        ctx.drawImage(img, this.rightHand.x - pw * 0.5 + 3, this.rightHand.y - ph + 12, pw, ph);
+      }
+    }
 
     // 4) Water droplets & hearts
     for (const p of this.particles) {

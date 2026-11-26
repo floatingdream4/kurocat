@@ -32,6 +32,7 @@ export interface AgentCompanionTarget {
   triggerHappyDemo?(duration?: number): void;
   triggerWakeDemo?(): void;
   triggerTailPatDemo?(): void;
+  setAgentCurious?(active: boolean, ttlMs?: number): void;
 }
 
 // Natural coding keystroke VKs (home-row letters, symbols, space, enter, backspace)
@@ -130,6 +131,7 @@ export class AgentCompanionController {
         } else {
           this.stopAutoTyping();
         }
+        target?.setAgentCurious?.(true, ev.ttlMs ?? 45_000);
         this.showBubble(ev.source, ev.text || '写代码中…', 'working');
         this.scheduleTtlClear(ev.ttlMs ?? 45_000);
         break;
@@ -141,6 +143,7 @@ export class AgentCompanionController {
           this.stopAutoTyping();
         }
         target?.triggerCuriousDemo(is3d ? 2.6 : 2600);
+        target?.setAgentCurious?.(true, ev.ttlMs ?? 35_000);
         this.showBubble(ev.source, ev.text || '思考中…', 'thinking');
         this.scheduleTtlClear(ev.ttlMs ?? 35_000);
         break;
@@ -148,6 +151,7 @@ export class AgentCompanionController {
       case 'waiting': {
         this.stopAutoTyping();
         target?.triggerCuriousDemo(is3d ? 4.2 : 4200);
+        target?.setAgentCurious?.(true, ev.ttlMs ?? 90_000);
         this.showBubble(ev.source, ev.text || '等你确认操作', 'waiting');
         this.scheduleTtlClear(ev.ttlMs ?? 90_000);
         if (ev.sound !== false && this.allowSound()) {
@@ -157,6 +161,7 @@ export class AgentCompanionController {
       }
       case 'done': {
         this.stopAutoTyping();
+        target?.setAgentCurious?.(false);
         if (target?.triggerHappyDemo) {
           target.triggerHappyDemo(is3d ? 2.8 : 2800);
         } else {
@@ -171,6 +176,7 @@ export class AgentCompanionController {
       }
       case 'error': {
         this.stopAutoTyping();
+        target?.setAgentCurious?.(false);
         target?.triggerCrossDemo();
         this.showBubble(ev.source, ev.text || '任务出错了', 'error');
         this.scheduleTtlClear(ev.ttlMs ?? 8_500);
@@ -181,6 +187,7 @@ export class AgentCompanionController {
       }
       default: {
         this.stopAutoTyping();
+        target?.setAgentCurious?.(false);
         if (ev.text) {
           this.showBubble(ev.source, ev.text, 'info');
           this.scheduleTtlClear(ev.ttlMs ?? 3_200);

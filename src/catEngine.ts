@@ -233,6 +233,7 @@ export class KuroCatEngine {
   private vsyncMs = 16.67;
   private vsyncSamples = 0;
   private gameActive = false;
+  private mediaActive = false;
   private kbCacheCanvas: HTMLCanvasElement | null = null;
   private kbCacheKey = '';
   private lastActivityAt = 0;
@@ -671,6 +672,8 @@ export class KuroCatEngine {
       privacyMode: this.privacyMode,
       privacyTypingAt: this.privacyTypingAt,
       is108: this.keyboardLayout === '108',
+      asleep: this.asleep,
+      watching: this.mediaActive,
     };
   }
 
@@ -920,6 +923,12 @@ export class KuroCatEngine {
     this.canvas.height = 0;
   }
 
+  /** Fullscreen video / slideshow in the foreground: BigFish puts on 3D glasses and snacks. */
+  public setMediaActive(active: boolean): void {
+    this.mediaActive = Boolean(active);
+    this.wakeRendering(performance.now());
+  }
+
   public setGameActive(active: boolean): void {
     this.gameActive = Boolean(active);
   }
@@ -998,7 +1007,12 @@ export class KuroCatEngine {
   }
 
   private pokeAnnoy(amount: number, now: number): void {
-    if (this.catBreed === 'dafeiyu' || this.privacyMode) return;
+    if (this.catBreed === 'dafeiyu') {
+      // BigFish only gets annoyed when disturbed during a movie
+      if (this.mediaActive && !this.privacyMode) this.dafeiyu.disturb(amount * 1.2, now);
+      return;
+    }
+    if (this.privacyMode) return;
     this.annoy = Math.max(0, Math.min(1, this.annoy + amount));
     this.lastPokeAt = now;
   }
@@ -1063,6 +1077,7 @@ export class KuroCatEngine {
   /** Interactive demo trigger: immediately shows laser-pointer curious big round pupils & perked ears! */
   public triggerCuriousDemo(durationMs = 3500): void {
     const now = performance.now();
+    if (this.catBreed === 'dafeiyu') this.dafeiyu.setCurious(now + durationMs);
     this.wakeCat(now, 'gentle');
     this.wakeAt = -10000;
     this.isCross = false;
@@ -1070,6 +1085,19 @@ export class KuroCatEngine {
     this.curiousUntil = now + durationMs;
     this.curiousSpring.kick(2.4);
     this.earPerkSpring.kick(2.2);
+  }
+
+  /** AI Companion: keep BigFish in her curious pose while an agent is working / thinking / waiting. */
+  public setAgentCurious(active: boolean, ttlMs = 45_000): void {
+    if (this.catBreed !== 'dafeiyu') return;
+    const now = performance.now();
+    if (active) {
+      this.asleep = false;
+      this.dafeiyu.setCurious(now + ttlMs);
+    } else {
+      this.dafeiyu.clearCurious();
+    }
+    this.wakeRendering(now);
   }
 
   /** Interactive demo trigger: immediately shows airplane ears + 3-beat grumpy tail desk-thump! */
@@ -1229,6 +1257,7 @@ export class KuroCatEngine {
         useTail ||
         this.shouldUseTailForKey(spec, rawKeyPt, dafeiyuMouseBusy, prevAnyKeyAt, now);
       const pt = dafeiyuUseTail ? this.getTailTargetPoint(spec) : rawKeyPt;
+      if (this.mediaActive && !repeat && !this.privacyMode) this.dafeiyu.disturb(0.16, now);
       this.dafeiyu.onKeyDown(vk, pt, dafeiyuLayout, repeat, dafeiyuUseTail);
       if (this.showKeyBubbles) {
         const label = formatBubbleForVk(vk, spec);
@@ -1496,6 +1525,9 @@ export class KuroCatEngine {
 
   public onMouseDown(button: string): void {
     const now = performance.now();
+    if (this.catBreed === 'dafeiyu' && this.mediaActive && this.cursorOverCat && !this.privacyMode) {
+      this.dafeiyu.disturb(0.4, now);
+    }
     this.wakeCat(now, 'abrupt');
     this.squashSpring.kick(1.2);
     if (button === 'left') {
@@ -1841,9 +1873,16 @@ export class KuroCatEngine {
     const isCatMode = this.catBreed !== 'dafeiyu';
 
     // 1) Alive cat emotional states: sleep (loaf + Zzz), curious (laser-pointer eyes), annoy -> cross (airplane ears + tail desk-thump), idle fidgets!
-    const sleepAfterMs = this.embedded ? 18_000 : 28_000;
+    // Cats doze off after ~28s; BigFish only after 5 minutes of system-wide idle, and never while an agent keeps her curious.
+    const sleepAfterMs = !isCatMode ? 300_000 : this.embedded ? 18_000 : 28_000;
     const idleMs = now - this.lastInputAt;
-    if (isCatMode && !this.privacyMode && !this.asleep && this.petEnergy < 0.15 && idleMs > sleepAfterMs) {
+    if (
+      (isCatMode || (!this.dafeiyu.isCurious(now) && !this.mediaActive)) &&
+      !this.privacyMode &&
+      !this.asleep &&
+      this.petEnergy < 0.15 &&
+      idleMs > sleepAfterMs
+    ) {
       this.asleep = true;
       this.isCross = false;
       this.idleAct = null;
