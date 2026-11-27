@@ -1982,11 +1982,17 @@ export class KuroCatEngine {
 
   // ---- Input event handlers ----
 
+  /** BigFish is asleep: the desk keyboard and mouse stay still until a click on her wakes her. */
+  private dafeiyuSleeping(): boolean {
+    return this.catBreed === 'dafeiyu' && this.asleep;
+  }
+
   public onKeyDown(vk: number, repeat: boolean): void {
     if (this.privacyMode) {
       if (!repeat) this.onPrivacyTyping();
       return;
     }
+    if (this.dafeiyuSleeping()) return;
     const now = performance.now();
     const spec = resolveKeyByVk(vk, this.keyboardLayout);
     if (!spec) return;
@@ -2234,6 +2240,7 @@ export class KuroCatEngine {
 
     this.lastMouseNX = nx;
     this.lastMouseNY = ny;
+    if (this.dafeiyuSleeping()) return;
 
     // Ignore micro-jitter while actively typing so a tiny desk bump never hijacks the typing paw
     const typingNow = now - this.lastAnyKeyAt < 500 || this.heldKeys.size > 0;
@@ -2314,6 +2321,7 @@ export class KuroCatEngine {
     this.dafeiyuClickWake = button === 'left' && this.cursorOverCat && !this.privacyMode;
     this.wakeCat(now, 'abrupt');
     this.dafeiyuClickWake = false;
+    if (this.dafeiyuSleeping()) return;
     this.squashSpring.kick(1.2);
     if (button === 'left') {
       this.mouseLeftDown = true;
@@ -2356,6 +2364,7 @@ export class KuroCatEngine {
   }
 
   public onMouseWheel(): void {
+    if (this.dafeiyuSleeping()) return;
     const now = performance.now();
     this.wakeCat(now, 'abrupt');
     this.mouseScrollFlash = 1;
