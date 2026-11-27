@@ -583,7 +583,11 @@ export class DaFeiYuRenderer {
     let hovering = false;
     if (quiet && !isHappy && !isTyping && !dragging && layout.cursor && !layout.mouseLeft && !layout.mouseRight) {
       const face = this.computeGeom(now, layout).spritePointToWorld(0.5, 0.5);
-      hovering = Math.hypot(layout.cursor.x - face.x, layout.cursor.y - face.y) < 46;
+      // While the mouse moves she leans ~38px toward the desk mouse, so the cursor is aimed at the
+      // leaned face; once it stops she straightens up and slides away from it. Enter within 46px,
+      // but keep the hover (and its timer) until the cursor is more than 90px from her face.
+      const radius = this.hoverSince >= 0 ? 90 : 46;
+      hovering = Math.hypot(layout.cursor.x - face.x, layout.cursor.y - face.y) < radius;
     }
     if (hovering && layout.cursor) {
       if (

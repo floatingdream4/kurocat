@@ -23,8 +23,10 @@ const scs: Sc[] = [
   { name: '8 wake-up stretch', stopAt: 1150, setup: noGreet, tick: (r, L, t) => { L.asleep = t < 400; } },
   { name: '9 Ctrl+S thumbs-up', stopAt: 1400, setup: noGreet,
     tick: (r, L, t) => { if (t > 800 && !r._k) { r._k = 1; r.onKeyDown(0xa2, { x: 120, y: 372 }, L, false, false); r.onKeyDown(0x53, { x: 170, y: 352 }, L, false, false); r.onKeyUp(0x53); r.onKeyUp(0xa2); } } },
-  { name: '10 stared at (cursor resting on face)', stopAt: 3400, setup: noGreet,
-    tick: (r, L, t, now) => { const g = r.computeGeom(now, L); const f = g.spritePointToWorld(0.5, 0.5); L.cursor = { x: f.x + 6, y: f.y + 4 }; r._cur = L.cursor; } },
+  // Realistic: the cursor glides in (she leans toward the desk mouse), stops on her face as drawn, then rests
+  { name: '10 stared at (cursor resting on face)', stopAt: 4400, setup: noGreet,
+    tick: (r, L, t, now) => { if (t < 1000) { const f = r.computeGeom(now, L).spritePointToWorld(0.5, 0.5); const k = t / 1000;
+      L.cursor = { x: 380 + (f.x + 6 - 380) * k, y: 120 + (f.y + 4 - 120) * k }; L.mouseActiveAt = now; } r._cur = L.cursor; } },
   { name: '11 agent working (curious) - regression', stopAt: 1200, setup: (r) => { noGreet(r); r.setCurious(performance.now() + 60000); } },
   { name: '12 asleep - regression', stopAt: 1500, setup: noGreet, tick: (r, L) => { L.asleep = true; } },
   { name: '13 movie mode + snack - regression', stopAt: 3200, setup: noGreet, tick: (r, L) => { L.watching = true; } },
