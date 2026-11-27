@@ -1029,6 +1029,13 @@ export class KuroCatEngine {
       is108: this.keyboardLayout === '108',
       asleep: this.asleep,
       watching: this.mediaActive,
+      dragging: this.isDragging,
+      dragVelX: this.scruffDragVelX,
+      // Nodding off during the last 45s of the 5-minute idle window before BigFish falls asleep
+      drowsy:
+        this.asleep || this.mediaActive
+          ? 0
+          : Math.max(0, Math.min(1, (performance.now() - this.lastInputAt - 255_000) / 45_000)),
       peekAmount: Math.max(0, Math.min(1, this.peekAmount)),
     };
   }
@@ -1680,6 +1687,27 @@ export class KuroCatEngine {
     this.wakeAction(now);
   }
 
+  /** AI Companion: an agent needs the user (permission prompt, question) - BigFish waves with a '!'. */
+  public setAgentWaiting(active: boolean, ttlMs = 90_000): void {
+    if (this.catBreed !== 'dafeiyu') return;
+    const now = performance.now();
+    if (active) {
+      this.asleep = false;
+      this.dafeiyu.setWaiting(now + ttlMs);
+    } else {
+      this.dafeiyu.clearWaiting();
+    }
+    this.wakeAction(now);
+  }
+
+  /** AI Companion: an agent finished - BigFish cheers with confetti. */
+  public celebrateAgentDone(): void {
+    if (this.catBreed !== 'dafeiyu') return;
+    const now = performance.now();
+    this.dafeiyu.celebrate(now);
+    this.wakeAction(now);
+  }
+
   /** Interactive demo trigger: immediately shows airplane ears + 3-beat grumpy tail desk-thump! */
   public triggerCrossDemo(): void {
     const now = performance.now();
@@ -2251,6 +2279,10 @@ export class KuroCatEngine {
     const now = performance.now();
     if (this.catBreed === 'dafeiyu' && this.mediaActive && this.cursorOverCat && !this.privacyMode) {
       this.dafeiyu.disturb(0.4, now);
+    }
+    if (this.catBreed === 'dafeiyu' && button === 'left' && !this.privacyMode) {
+      // Tail poke / double-click greeting (hit-tested by the BigFish renderer)
+      this.dafeiyu.onPointerDown(now, this.buildDaFeiYuLayout());
     }
     this.wakeCat(now, 'abrupt');
     this.squashSpring.kick(1.2);

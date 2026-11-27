@@ -36,6 +36,27 @@ export interface DaFeiYuLayout {
   /** True while a fullscreen video / slideshow is in the foreground (3D glasses + snacks mode). */
   watching?: boolean;
   peekAmount?: number;
+  /** True while the user is dragging the pet window around. */
+  dragging?: boolean;
+  /** Horizontal drag velocity (clamped to about +-2.8) while dragging. */
+  dragVelX?: number;
+  /** 0..1 ramp over the last ~45s before she falls asleep (nodding off). */
+  drowsy?: number;
+}
+
+type DaFeiYuAct = 'wave' | 'cheer' | 'thumbs' | 'stretch';
+
+interface ConfettiBit {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  rot: number;
+  vr: number;
+  life: number;
+  w: number;
+  h: number;
+  color: string;
 }
 
 interface HandState {
@@ -151,6 +172,36 @@ export class DaFeiYuRenderer {
   private ripples: WaterRipple[] = [];
   private particles: FloatingParticle[] = [];
 
+  // --- Extra interactions (all code-driven, reusing the existing frames) ---
+  // Agent is waiting for the user: raised waving hand + '!' mark
+  private waitingSince = -10000;
+  private waitingUntil = -10000;
+  // Short one-shot gestures: greeting wave, done cheer, Ctrl+S thumbs-up, wake-up stretch
+  private act: { kind: DaFeiYuAct; t0: number; dur: number } | null = null;
+  private firstUpdateAt = -1;
+  private greeted = false;
+  private wasAsleep = false;
+  private ctrlDownAt = -10000;
+  private lastBodyClickAt = -10000;
+  // Tail poke: flinch + startled glance at the tail
+  private tailFlinchAt = -10000;
+  private startleUntil = -10000;
+  private glance: { x: number; y: number; until: number } | null = null;
+  // Cursor resting on her face makes her shy
+  private hoverSince = -1;
+  private hoverX = 0;
+  private hoverY = 0;
+  private stareShy = false;
+  // Being dragged: pendulum sway, slight lift, landing squash
+  private dragSwing = 0;
+  private dragSwingVel = 0;
+  private dragLift = 0;
+  private wasDragging = false;
+  // Nodding off shortly before sleep
+  private drowsyClosed = false;
+  private confetti: ConfettiBit[] = [];
+  private lastCenterX = 192;
+
   constructor() {
     // Sprites are lazy-loaded on first render so default cat skins never decode 4 PNGs into RAM.
   }
@@ -241,8 +292,78 @@ export class DaFeiYuRenderer {
     this.curiousUntil = -10000;
   }
 
+  /** True while an agent keeps her attentive (curious or waiting), which also keeps her awake. */
   public isCurious(now: number): boolean {
-    return now < this.curiousUntil;
+    return now < this.curiousUntil || now < this.waitingUntil;
+  }
+
+  /** Agent needs the user: wave a raised hand with a '!' until `untilMs` (performance.now() clock). */
+  public setWaiting(untilMs: number): void {
+    const now = performance.now();
+    if (now >= this.waitingUntil) this.waitingSince = now;
+    this.waitingUntil = untilMs;
+  }
+
+  public clearWaiting(): void {
+    this.waitingUntil = -10000;
+  }
+
+  private startAct(kind: DaFeiYuAct, now: number, dur: number): void {
+    this.act = { kind, t0: now, dur };
+  }
+
+  /** Agent finished: both arms up and a burst of confetti. */
+  public celebrate(now: number): void {
+    this.startAct('cheer', now, 2600);
+    const colors = ['#ff9a52', '#ffd37a', '#fff4e1', '#f2a25a', '#ff7a6b', '#8fd3a8'];
+    for (let i = 0; i < 30; i++) {
+      const a = -Math.PI / 2 + (Math.random() - 0.5) * 2.1;
+      const sp = 150 + Math.random() * 190;
+      this.confetti.push({
+        x: this.lastCenterX + (Math.random() - 0.5) * 70,
+        y: 150 + (Math.random() - 0.5) * 30,
+        vx: Math.cos(a) * sp,
+        vy: Math.sin(a) * sp,
+        rot: Math.random() * Math.PI,
+        vr: (Math.random() - 0.5) * 14,
+        life: 1,
+        w: 4 + Math.random() * 4,
+        h: 2.5 + Math.random() * 3,
+        color: colors[i % colors.length],
+      });
+    }
+  }
+
+  /** Left click somewhere in the pet window: poke the tail, or double-click her to get a wave. */
+  public onPointerDown(now: number, layout: DaFeiYuLayout): void {
+    if (layout.privacyMode || layout.asleep || !layout.cursor) return;
+    const g = this.computeGeom(now, layout);
+    const c = layout.cursor;
+    const tailRoot = g.spritePointToWorld(0.56, 0.785);
+    const tipX = tailRoot.x + this.tail.relX;
+    const tipY = tailRoot.y + this.tail.relY;
+    const midX = tailRoot.x + this.tail.relX * 0.6;
+    const midY = tailRoot.y + this.tail.relY * 0.6 - 10;
+    const nearTail =
+      this.tail.phase < 0.2 &&
+      (Math.hypot(c.x - tipX, c.y - tipY) < 30 || Math.hypot(c.x - midX, c.y - midY) < 20);
+    if (nearTail) {
+      this.tailFlinchAt = now;
+      this.startleUntil = now + 750;
+      this.glance = { x: tipX, y: tipY, until: now + 1100 };
+      this.bodyBob = Math.min(1.1, this.bodyBob + 0.7);
+      this.spawnParticles(tipX, tipY - 6, 2, true);
+      return;
+    }
+    const body = g.spritePointToWorld(0.5, 0.55);
+    if (Math.abs(c.x - body.x) < g.drawW * 0.36 && Math.abs(c.y - body.y) < g.drawH * 0.42) {
+      if (now - this.lastBodyClickAt < 420 && !layout.watching) {
+        this.startAct('wave', now, 2000);
+        this.lastBodyClickAt = -10000;
+      } else {
+        this.lastBodyClickAt = now;
+      }
+    }
   }
 
   public onPrivacyTyping(): void {
@@ -291,8 +412,13 @@ export class DaFeiYuRenderer {
     repeat: boolean,
     useTail: boolean,
   ): void {
+    if (vk === 0x11 || vk === 0xa2 || vk === 0xa3) this.ctrlDownAt = performance.now();
     if (layout.privacyMode || repeat) return;
     const now = performance.now();
+    // Ctrl+S: a quick thumbs-up for saving
+    if (vk === 0x53 && now - this.ctrlDownAt < 6000 && !layout.asleep && !layout.watching) {
+      this.startAct('thumbs', now, 1500);
+    }
     this.lastKeyAt = now;
     this.lastKeyGazeAt = now;
     this.lastKeyPtX = pt.x;
@@ -358,6 +484,7 @@ export class DaFeiYuRenderer {
 
   public onKeyUp(vk: number): void {
     const now = performance.now();
+    if (vk === 0x11 || vk === 0xa2 || vk === 0xa3) this.ctrlDownAt = -10000;
     this.leftHand.heldVks.delete(vk);
     this.rightHand.heldVks.delete(vk);
     if (this.tail.heldVks.has(vk)) {
@@ -394,6 +521,7 @@ export class DaFeiYuRenderer {
     const mouseMode =
       !layout.privacyMode &&
       !isHappy &&
+      !layout.dragging &&
       (layout.mouseLeft || layout.mouseRight || now - layout.mouseActiveAt < 900);
 
     // 0) Immersive movie mode: annoyance decay + the snack she is holding
@@ -419,6 +547,71 @@ export class DaFeiYuRenderer {
       this.annoy = 0;
     }
     this.wasWatching = watching;
+
+    // 0b) Extra interactions: greeting, wake-up stretch, drag sway, hover shyness, nodding off
+    const quiet = !layout.privacyMode && !layout.asleep && !watching;
+    if (this.firstUpdateAt < 0) this.firstUpdateAt = now;
+    if (!this.greeted && now - this.firstUpdateAt > 900) {
+      this.greeted = true;
+      if (quiet) this.startAct('wave', now, 2000);
+    }
+    if (this.wasAsleep && !layout.asleep && !layout.privacyMode && !watching) {
+      this.startAct('stretch', now, 1500);
+    }
+    this.wasAsleep = Boolean(layout.asleep);
+    if (this.act && (now - this.act.t0 > this.act.dur || (!quiet && this.act.kind !== 'cheer'))) {
+      this.act = null;
+    }
+
+    const dragging = !layout.privacyMode && Boolean(layout.dragging);
+    if (dragging && !this.wasDragging) {
+      this.dragSwingVel += (Math.random() < 0.5 ? -1 : 1) * 1.5;
+      this.act = null;
+    } else if (!dragging && this.wasDragging) {
+      this.bodyBob = Math.min(1.3, this.bodyBob + 1.1);
+    }
+    this.wasDragging = dragging;
+    const swingTarget = dragging
+      ? Math.max(-0.2, Math.min(0.2, -(layout.dragVelX ?? 0) * 0.08))
+      : 0;
+    const swingAcc = (swingTarget - this.dragSwing) * 58 - this.dragSwingVel * 5.2;
+    this.dragSwingVel += swingAcc * dt;
+    this.dragSwing += this.dragSwingVel * dt;
+    this.dragLift += ((dragging ? 1 : 0) - this.dragLift) * (1 - Math.exp(-10 * dt));
+
+    // A cursor resting on her face for a couple of seconds makes her shy
+    let hovering = false;
+    if (quiet && !isHappy && !isTyping && !dragging && layout.cursor && !layout.mouseLeft && !layout.mouseRight) {
+      const face = this.computeGeom(now, layout).spritePointToWorld(0.5, 0.5);
+      hovering = Math.hypot(layout.cursor.x - face.x, layout.cursor.y - face.y) < 46;
+    }
+    if (hovering && layout.cursor) {
+      if (
+        this.hoverSince < 0 ||
+        Math.hypot(layout.cursor.x - this.hoverX, layout.cursor.y - this.hoverY) > 14
+      ) {
+        this.hoverSince = now;
+        this.hoverX = layout.cursor.x;
+        this.hoverY = layout.cursor.y;
+      }
+      this.stareShy = now - this.hoverSince > 2200;
+    } else {
+      this.hoverSince = -1;
+      this.stareShy = false;
+    }
+
+    // Nodding off: slow eyelid droops and a head dip in the last moments before sleep
+    const attentive = now < this.curiousUntil || now < this.waitingUntil;
+    const drowsy =
+      quiet && !isHappy && !isTyping && !dragging && !this.act && !attentive ? (layout.drowsy ?? 0) : 0;
+    const wasDrowsyClosed = this.drowsyClosed;
+    if (drowsy > 0.02) {
+      const nod = (now % 3600) / 3600;
+      this.drowsyClosed = nod > 0.3 && nod < 0.86;
+      if (wasDrowsyClosed && !this.drowsyClosed) this.bodyBob = Math.min(1.0, this.bodyBob + 0.45);
+    } else {
+      this.drowsyClosed = false;
+    }
 
     // 1) Calm 2.8s typing-speed window + hysteresis-locked blush mood (min 2.2s dwell, zero flicker!)
     while (this.keyTimes.length && now - this.keyTimes[0] > 2800) {
@@ -460,6 +653,7 @@ export class DaFeiYuRenderer {
       isHappy ? 0.45 : 0,
       layout.privacyMode ? 0.46 : 0,
       this.moodTier === 1 ? 0.55 : this.moodTier === 2 ? 0.85 : 0,
+      this.stareShy ? 0.72 : 0,
     );
     this.blushLevel += (targetBlush - this.blushLevel) * (1 - Math.exp(-3.2 * dt));
 
@@ -503,10 +697,18 @@ export class DaFeiYuRenderer {
         ? 0.055
         : watching && now < this.angryUntil
           ? Math.sin(now * 0.045) * 0.035
-          : !isHappy && !watching && now < this.curiousUntil
-            ? 0.07
-            : 0;
-      this.bodyDiveY *= Math.exp(-9 * dt);
+          : this.drowsyClosed
+            ? 0.06
+            : this.stareShy
+              ? -0.045
+              : !isHappy && !watching && now >= this.waitingUntil && now < this.curiousUntil
+                ? 0.07
+                : 0;
+      if (this.drowsyClosed) {
+        this.bodyDiveY += (7 - this.bodyDiveY) * (1 - Math.exp(-2.4 * dt));
+      } else {
+        this.bodyDiveY *= Math.exp(-9 * dt);
+      }
     } else {
       this.bodyDiveY *= Math.exp(-9 * dt);
     }
@@ -542,6 +744,11 @@ export class DaFeiYuRenderer {
       gazeTarget = { x: layout.mouseBtnX, y: layout.mouseBtnY };
     }
 
+    if (this.glance) {
+      if (now >= this.glance.until) this.glance = null;
+      else if (!layout.privacyMode && !isHappy) gazeTarget = this.glance;
+    }
+
     let gazeTx = 0;
     let gazeTy = 0;
     if (gazeTarget) {
@@ -549,8 +756,8 @@ export class DaFeiYuRenderer {
       const eyeWorld = g.spritePointToWorld(0.49, 0.495);
       const wdx = gazeTarget.x - eyeWorld.x;
       const wdy = gazeTarget.y - eyeWorld.y;
-      const c = Math.cos(-this.bodyTilt);
-      const s = Math.sin(-this.bodyTilt);
+      const c = Math.cos(-this.bodyTilt - this.dragSwing);
+      const s = Math.sin(-this.bodyTilt - this.dragSwing);
       const localDx = wdx * c - wdy * s;
       const localDy = wdx * s + wdy * c;
       gazeTx = Math.max(-4.6, Math.min(4.6, localDx / 21));
@@ -597,13 +804,16 @@ export class DaFeiYuRenderer {
 
     const slapOffX = this.tail.slapTargetX - tailRoot.x;
     const slapOffY = this.tail.slapTargetY - tailRoot.y;
-    const targetRelX = idleOffX + (slapOffX - idleOffX) * this.tail.phase;
-    const targetRelY = idleOffY + (slapOffY - idleOffY) * this.tail.phase;
+    // Tail poke: the tail curls in toward her body for a moment and quivers
+    const flinch = Math.max(0, 1 - (now - this.tailFlinchAt) / 650);
+    const targetRelX = (idleOffX + (slapOffX - idleOffX) * this.tail.phase) * (1 - 0.45 * flinch);
+    const targetRelY = idleOffY + (slapOffY - idleOffY) * this.tail.phase + 14 * flinch;
     const tLerp = 1 - Math.exp(-36 * dt);
     this.tail.relX += (targetRelX - this.tail.relX) * tLerp;
     this.tail.relY += (targetRelY - this.tail.relY) * tLerp;
     this.tail.squash *= Math.exp(-11 * dt);
-    this.tail.activeWag = idleWag * (1 - this.tail.phase) + -0.08 * this.tail.phase;
+    this.tail.activeWag =
+      idleWag * (1 - this.tail.phase) + -0.08 * this.tail.phase + Math.sin(now * 0.055) * 0.5 * flinch;
 
     // 3) Ripples & particles
     for (let i = this.ripples.length - 1; i >= 0; i--) {
@@ -619,6 +829,17 @@ export class DaFeiYuRenderer {
       p.life -= 0.022 * (dt * 60);
       if (p.life <= 0) this.particles.splice(i, 1);
     }
+    for (let i = this.confetti.length - 1; i >= 0; i--) {
+      const cf = this.confetti[i];
+      cf.vy += 300 * dt;
+      cf.vx *= Math.exp(-1.4 * dt);
+      cf.x += cf.vx * dt;
+      cf.y += cf.vy * dt;
+      cf.rot += cf.vr * dt;
+      cf.life -= dt / 1.9;
+      if (cf.life <= 0) this.confetti.splice(i, 1);
+    }
+    this.lastCenterX = (layout.is108 ? 268 : 192) + this.bodyShiftX;
   }
 
   private computeGeom(now: number, layout: DaFeiYuLayout) {
@@ -626,7 +847,7 @@ export class DaFeiYuRenderer {
     const baseCharY = layout.is108 ? 366 : 364;
     // Slower, deeper breathing while asleep
     const breathWave = layout.asleep ? Math.sin(now * 0.0016) * 3.2 : Math.sin(now * 0.0034) * 2.2;
-    const breath = breathWave + this.bodyBob * 3.8 + this.bodyDiveY;
+    const breath = breathWave + this.bodyBob * 3.8 + this.bodyDiveY - this.dragLift * 8;
     const charCenterX = charX + this.bodyShiftX;
     const charBaseY = baseCharY + breath;
     const drawW = layout.is108 ? 268 : 262;
@@ -637,8 +858,8 @@ export class DaFeiYuRenderer {
     const spritePointToWorld = (normX: number, normY: number) => {
       const lx = (normX - 0.5) * drawW;
       const ly = normY * drawH - drawH + pivotOff;
-      const c = Math.cos(this.bodyTilt);
-      const s = Math.sin(this.bodyTilt);
+      const c = Math.cos(this.bodyTilt + this.dragSwing);
+      const s = Math.sin(this.bodyTilt + this.dragSwing);
       return {
         x: charCenterX + lx * c - ly * s,
         y: pivotY + lx * s + ly * c,
@@ -921,15 +1142,22 @@ export class DaFeiYuRenderer {
     const isWatching = !layout.privacyMode && !layout.asleep && Boolean(layout.watching);
     const isCurious =
       !layout.privacyMode && !isHappy && !isAsleep && !isWatching && now < this.curiousUntil;
+    const isWaiting = !layout.privacyMode && !isAsleep && !isWatching && now < this.waitingUntil;
+    const actKind = this.act ? this.act.kind : null;
     let exprKey: DaFeiYuExpr = 'idle';
     if (layout.privacyMode) exprKey = 'blink';
     else if (isAsleep) exprKey = 'sleep';
     else if (isWatching) exprKey = now < this.angryUntil ? 'angry' : 'watch';
-    else if (isHappy) exprKey = 'happy';
+    else if (layout.dragging) exprKey = 'curious';
+    else if (isHappy || actKind === 'cheer' || actKind === 'wave') exprKey = 'happy';
+    else if (actKind === 'thumbs' || actKind === 'stretch') exprKey = 'shy';
+    else if (now < this.startleUntil) exprKey = 'curious';
+    else if (isWaiting) exprKey = isBlinking ? 'blink' : 'idle';
     else if (isCurious) exprKey = 'curious';
+    else if (this.stareShy) exprKey = 'shy';
     else if (this.moodTier === 2) exprKey = 'happy';
     else if (this.moodTier === 1) exprKey = 'shy';
-    else if (isBlinking) exprKey = 'blink';
+    else if (this.drowsyClosed || isBlinking) exprKey = 'blink';
 
     const sprites = this.ensureSprites();
     const img = sprites[exprKey] || sprites.idle;
@@ -941,8 +1169,16 @@ export class DaFeiYuRenderer {
         ctx.clip();
       }
       ctx.translate(g.charCenterX, g.pivotY);
-      ctx.rotate(this.bodyTilt);
-      ctx.scale(1 + this.bodyBob * 0.022, 1 - this.bodyBob * 0.018);
+      ctx.rotate(this.bodyTilt + this.dragSwing);
+      // Wake-up stretch: a slow tall reach, on top of the usual key-press squash
+      const stretchS =
+        this.act && this.act.kind === 'stretch'
+          ? Math.sin(Math.PI * Math.min(1, (now - this.act.t0) / this.act.dur))
+          : 0;
+      ctx.scale(
+        (1 + this.bodyBob * 0.022) * (1 - stretchS * 0.03),
+        (1 - this.bodyBob * 0.018) * (1 + stretchS * 0.045),
+      );
       ctx.drawImage(img, -g.drawW * 0.5, -g.drawH + g.pivotOff, g.drawW, g.drawH);
 
       // Live2D eye gaze toward mouse/keyboard when eyes are open
@@ -1004,6 +1240,10 @@ export class DaFeiYuRenderer {
 
     const isHappy = !layout.privacyMode && layout.petEnergy > 0.25;
     const watching = !layout.privacyMode && !layout.asleep && Boolean(layout.watching);
+    const dragging = !layout.privacyMode && Boolean(layout.dragging);
+    const isWaiting = !layout.privacyMode && !layout.asleep && !watching && now < this.waitingUntil;
+    const actKind = this.act ? this.act.kind : null;
+    const actT = this.act ? Math.min(1, (now - this.act.t0) / this.act.dur) : 0;
 
     // 0) Floating '?' beside her head while curious (agent working / thinking / waiting)
     if (!layout.privacyMode && !isHappy && layout.asleep) {
@@ -1053,7 +1293,36 @@ export class DaFeiYuRenderer {
         }
       }
       ctx.restore();
-    } else if (!layout.privacyMode && !isHappy && !watching && now < this.curiousUntil) {
+    } else if (isWaiting && !isHappy && !dragging) {
+      // Bouncing '!' while an agent waits for the user
+      const fadeIn = Math.min(1, (now - this.waitingSince) / 220);
+      const fadeOut = Math.min(1, (this.waitingUntil - now) / 320);
+      const ep = g.spritePointToWorld(0.16, 0.17);
+      const hop = Math.abs(Math.sin(now * 0.0065)) * 7;
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, Math.min(fadeIn, fadeOut));
+      ctx.translate(ep.x, ep.y - hop);
+      ctx.rotate(-0.16);
+      ctx.scale(0.7 + 0.3 * fadeIn, 0.7 + 0.3 * fadeIn);
+      ctx.font = '900 32px "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.lineJoin = 'round';
+      ctx.lineWidth = 5;
+      ctx.strokeStyle = '#3a2418';
+      ctx.strokeText('!', 0, 0);
+      ctx.fillStyle = '#ff7a45';
+      ctx.fillText('!', 0, 0);
+      ctx.restore();
+    } else if (
+      !layout.privacyMode &&
+      !isHappy &&
+      !watching &&
+      !dragging &&
+      !this.act &&
+      now >= this.startleUntil &&
+      now < this.curiousUntil
+    ) {
       const fadeIn = Math.min(1, (now - this.curiousSince) / 260);
       const fadeOut = Math.min(1, (this.curiousUntil - now) / 320);
       const alpha = Math.max(0, Math.min(fadeIn, fadeOut));
@@ -1079,6 +1348,7 @@ export class DaFeiYuRenderer {
     const mouseMode =
       !layout.privacyMode &&
       !isHappy &&
+      !layout.dragging &&
       (layout.mouseLeft || layout.mouseRight || now - layout.mouseActiveAt < 900);
 
     // 1) Water slap ripples on keyboard
@@ -1133,12 +1403,14 @@ export class DaFeiYuRenderer {
       lTargetY = eyeL.y + shyBob;
       rTargetX = eyeR.x;
       rTargetY = eyeR.y - shyBob;
-    } else if (isHappy) {
-      const cheer = Math.sin(now * 0.016) * 5.0;
-      lTargetX = shL.x - 14;
-      lTargetY = shL.y + 4 + cheer;
-      rTargetX = shR.x + 14;
-      rTargetY = shR.y + 4 - cheer;
+    } else if (isHappy || actKind === 'cheer') {
+      // Agent-done cheer throws both arms high; ordinary petting keeps the small happy bob
+      const big = actKind === 'cheer';
+      const cheer = Math.sin(now * 0.016) * (big ? 9 : 5.0);
+      lTargetX = shL.x - (big ? 26 : 14);
+      lTargetY = shL.y + (big ? -36 : 4) + cheer;
+      rTargetX = shR.x + (big ? 26 : 14);
+      rTargetY = shR.y + (big ? -36 : 4) - cheer;
     } else {
       if (mouseMode) {
         const pressOff = layout.mouseLeft || layout.mouseRight ? 2.5 : 0;
@@ -1147,6 +1419,13 @@ export class DaFeiYuRenderer {
       } else if (leftTyping) {
         lTargetX = this.leftHand.tx;
         lTargetY = this.leftHand.ty;
+      } else if (actKind === 'stretch') {
+        const up = Math.sin(Math.PI * actT);
+        lTargetX = shL.x - 15 - up * 9;
+        lTargetY = shL.y + 34 - up * 92;
+      } else if (dragging) {
+        lTargetX = shL.x - 13 - this.dragSwing * 70;
+        lTargetY = shL.y + 40;
       } else {
         lTargetX = shL.x - 15;
         lTargetY = shL.y + 34;
@@ -1154,6 +1433,25 @@ export class DaFeiYuRenderer {
       if (rightTyping) {
         rTargetX = this.rightHand.tx;
         rTargetY = this.rightHand.ty;
+      } else if (actKind === 'stretch') {
+        const up = Math.sin(Math.PI * actT);
+        rTargetX = shR.x + 15 + up * 9;
+        rTargetY = shR.y + 34 - up * 92;
+      } else if (actKind === 'wave') {
+        const w = now * 0.019;
+        rTargetX = shR.x + 34 + Math.sin(w) * 13;
+        rTargetY = shR.y - 44 - Math.abs(Math.cos(w)) * 4;
+      } else if (actKind === 'thumbs') {
+        rTargetX = shR.x + 30;
+        rTargetY = shR.y - 26;
+      } else if (dragging) {
+        rTargetX = shR.x + 13 - this.dragSwing * 70;
+        rTargetY = shR.y + 40;
+      } else if (isWaiting) {
+        // Beckoning wave while an agent waits for the user
+        const w = now * 0.012;
+        rTargetX = shR.x + 32 + Math.sin(w) * 9;
+        rTargetY = shR.y - 42 + Math.cos(w * 2) * 3;
       } else if (watching && this.propKind && now >= this.angryUntil) {
         // Holding a snack: hand rests at chest height and lifts toward her mouth now and then
         const sip = Math.max(0, Math.sin(now * 0.0021)) ** 2;
@@ -1210,7 +1508,33 @@ export class DaFeiYuRenderer {
       ctx.save();
       ctx.globalAlpha = Math.max(0, p.life);
       ctx.font = '14px sans-serif';
-      ctx.fillText(p.kind === 'heart' ? '💙' : '💧', p.x, p.y);
+      ctx.fillText(p.kind === 'heart' ? '🧡' : '💧', p.x, p.y);
+      ctx.restore();
+    }
+
+    // 5) Thumbs-up popping beside her raised hand (Ctrl+S)
+    if (actKind === 'thumbs' && !layout.privacyMode && !rightTyping) {
+      const pop = Math.min(1, actT / 0.16);
+      const fade = Math.min(1, (1 - actT) / 0.2);
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, fade);
+      ctx.translate(this.rightHand.x + 4, this.rightHand.y - 26 - actT * 6);
+      ctx.scale(0.5 + 0.6 * pop, 0.5 + 0.6 * pop);
+      ctx.font = '22px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('👍', 0, 0);
+      ctx.restore();
+    }
+
+    // 6) Confetti burst (agent finished)
+    for (const cf of this.confetti) {
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, Math.min(1, cf.life * 2.2));
+      ctx.translate(cf.x, cf.y);
+      ctx.rotate(cf.rot);
+      ctx.fillStyle = cf.color;
+      ctx.fillRect(-cf.w / 2, -cf.h / 2, cf.w, cf.h);
       ctx.restore();
     }
   }
