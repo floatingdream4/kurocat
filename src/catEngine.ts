@@ -1128,6 +1128,7 @@ export class KuroCatEngine {
   // Alive cat emotional state machine: curious (laser-pointer eyes), sleepy loaf (Zzz), idle fidgets, cross (airplane ears + tail desk-thump!)
   private lastInputAt = performance.now();
   private asleep = false;
+  private dafeiyuClickWake = false;
   private sleepAmount = 0;
   private breathPhase = 0;
   private tailDriftPhase = 0;
@@ -1609,6 +1610,8 @@ export class KuroCatEngine {
     mode: 'gentle' | 'abrupt' = 'gentle',
     highActivity = true,
   ): void {
+    // BigFish sleeps through typing, mouse moves and petting; only a click on her wakes her up
+    if (this.catBreed === 'dafeiyu' && this.asleep && !this.dafeiyuClickWake) return;
     const wasAsleep = this.asleep;
     const recentlyWoken = wasAsleep || this.sleepAmount >= 0.45 || now - this.wakeAt < 1200;
     if (highActivity || recentlyWoken) {
@@ -2308,7 +2311,9 @@ export class KuroCatEngine {
       // Tail poke / double-click greeting (hit-tested by the BigFish renderer)
       this.dafeiyu.onPointerDown(now, this.buildDaFeiYuLayout());
     }
+    this.dafeiyuClickWake = button === 'left' && this.cursorOverCat && !this.privacyMode;
     this.wakeCat(now, 'abrupt');
+    this.dafeiyuClickWake = false;
     this.squashSpring.kick(1.2);
     if (button === 'left') {
       this.mouseLeftDown = true;
@@ -2486,7 +2491,8 @@ export class KuroCatEngine {
           }
 
           // Only unlock petting energy & purring after intentional back-and-forth / circular strokes (Fixes #13)
-          if (this.petStrokeCount >= REQUIRED_STROKES) {
+          // A sleeping BigFish is not woken (or cheered up) by petting, only by a click
+          if (this.petStrokeCount >= REQUIRED_STROKES && !(this.catBreed === 'dafeiyu' && this.asleep)) {
             const zone = this.hitTestCatZoneLogical(px, py);
             if (zone === 'chin') {
               this.chinScratchEnergy = Math.min(1.4, this.chinScratchEnergy + dist * 0.018);

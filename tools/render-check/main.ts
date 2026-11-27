@@ -52,6 +52,8 @@ const scs: Sc[] = [
     tick: (r, L, t) => { L.gaming = true; const n = Math.floor(t / 110); if (n !== r._n) { r._n = n; const right = n % 2; r.onKeyDown(0x41 + (n % 20), { x: right ? 280 : 170, y: 350 }, L, false, false); r.onKeyUp(0x41 + (n % 20)); } } },
   { name: '25 gaming: headset + error panic', stopAt: 1300, setup: (r) => { noGreet(r); r.setPanic(performance.now() + 60000); },
     tick: (r, L) => { L.gaming = true; } },
+  { name: '26 asleep while typing + mouse (stays asleep)', stopAt: 1300, setup: noGreet,
+    tick: (r, L, t, now) => { L.asleep = true; L.mouseActiveAt = now; const n = Math.floor(t / 110); if (n !== r._n) { r._n = n; r.onKeyDown(0x41 + (n % 20), { x: n % 2 ? 280 : 170, y: 350 }, L, false, false); r.onKeyUp(0x41 + (n % 20)); } } },
 ];
 const ROWS = Math.ceil(scs.length / COLS);
 const cv = document.getElementById('c') as HTMLCanvasElement;

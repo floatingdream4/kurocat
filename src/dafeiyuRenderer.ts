@@ -457,7 +457,7 @@ export class DaFeiYuRenderer {
   }
 
   public triggerTailPreview(pt: { x: number; y: number }, layout: DaFeiYuLayout): void {
-    if (layout.privacyMode) return;
+    if (layout.privacyMode || layout.asleep) return;
     const now = performance.now();
     this.lastKeyGazeAt = now;
     this.lastKeyPtX = pt.x;
@@ -484,7 +484,8 @@ export class DaFeiYuRenderer {
     useTail: boolean,
   ): void {
     if (vk === 0x11 || vk === 0xa2 || vk === 0xa3) this.ctrlDownAt = performance.now();
-    if (layout.privacyMode || repeat) return;
+    // Asleep: she sleeps through typing (only a click on her wakes her up)
+    if (layout.privacyMode || repeat || layout.asleep) return;
     const now = performance.now();
     // Ctrl+S: a quick thumbs-up for saving
     if (vk === 0x53 && now - this.ctrlDownAt < 6000 && !layout.asleep && !layout.watching) {
@@ -593,6 +594,7 @@ export class DaFeiYuRenderer {
       !layout.privacyMode &&
       !isHappy &&
       !layout.dragging &&
+      !layout.asleep &&
       (layout.mouseLeft || layout.mouseRight || now - layout.mouseActiveAt < 900);
 
     // 0) Immersive movie mode: annoyance decay + the snack she is holding
@@ -1504,6 +1506,7 @@ export class DaFeiYuRenderer {
       !layout.privacyMode &&
       !isHappy &&
       !layout.dragging &&
+      !layout.asleep &&
       (layout.mouseLeft || layout.mouseRight || now - layout.mouseActiveAt < 900);
 
     // 1) Water slap ripples on keyboard
