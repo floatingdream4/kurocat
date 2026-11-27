@@ -589,7 +589,9 @@ export class KuroCatEngine {
     return this.peekEdge;
   }
 
-  private computePeekTransform2D(): { tx: number; ty: number; rot: number; pivotX: number; pivotY: number } {
+  private computePeekTransform2D(
+    hover = this.peekHover,
+  ): { tx: number; ty: number; rot: number; pivotX: number; pivotY: number } {
     const p = Math.max(0, Math.min(1, this.peekAmount));
     const isDafeiyu = this.catBreed === 'dafeiyu';
     const headY = this.catTopY + 0.24 * this.catHeight;
@@ -605,7 +607,7 @@ export class KuroCatEngine {
     const topEdge = -offsetY / s;
     const bottomEdge = (this.canvas.height - offsetY) / s;
     const midY = (topEdge + bottomEdge) * 0.5;
-    const extraPop = this.peekHover * 14;
+    const extraPop = hover * 14;
     const edgeInset = isDafeiyu ? 64 : 44;
     const tiltRad = isDafeiyu ? 1.18 : 1.28;
 
@@ -1200,6 +1202,7 @@ export class KuroCatEngine {
   private peekVisualEdge: 'left' | 'right' = 'left';
   private peekAmount = 0;
   private peekHover = 0;
+  private peekHoverHeldUntil = -10000;
   private peekTransform = { tx: 0, ty: 0, rot: 0, pivotX: 196, pivotY: 136 };
 
   // Spine-shear deformation state (exact measured flexible cat spine + playful typing body/head sway!)
@@ -2413,13 +2416,20 @@ export class KuroCatEngine {
     if (relX < 0 || relX > 1 || relY < 0 || relY > 1) return false;
     const rawX = relX * this.logicalW;
     const rawY = relY * this.logicalH;
-    const dx = rawX - (pivotX + tx);
-    const dy = rawY - (pivotY + ty);
-    const cos = Math.cos(-rot);
-    const sin = Math.sin(-rot);
-    const lx = pivotX + dx * cos - dy * sin;
-    const ly = pivotY + dx * sin + dy * cos;
-    return this.hitTestCatZoneLogical(lx, ly) === 'head';
+    // Test against both the resting and the fully popped-out head. Testing only the current pose
+    // made a feedback loop: the cursor near her head popped it out 14px, which moved it off the
+    // cursor, which pulled it back in, so moving the mouse there made her shake.
+    const hitAt = (t: { tx: number; ty: number; rot: number }): boolean => {
+      const dx = rawX - (pivotX + t.tx);
+      const dy = rawY - (pivotY + t.ty);
+      const cos = Math.cos(-t.rot);
+      const sin = Math.sin(-t.rot);
+      const lx = pivotX + dx * cos - dy * sin;
+      const ly = pivotY + dx * sin + dy * cos;
+      return this.hitTestCatZoneLogical(lx, ly) === 'head';
+    };
+    if (this.peekAmount < 0.99) return hitAt({ tx, ty, rot });
+    return hitAt(this.computePeekTransform2D(0)) || hitAt(this.computePeekTransform2D(1));
   }
 
   public onWindowCursor(relX: number, relY: number, overCat: boolean, input: 'pointer' | 'touch' = 'pointer'): void {
@@ -2725,7 +2735,12 @@ export class KuroCatEngine {
     const peekGoal = previewWanted ? 0.90 : peekWanted ? 1.0 : 0.0;
     this.peekAmount = Math.max(0, Math.min(1.06, this.peekSpring.step(peekGoal, dt)));
     const peekClamped = Math.min(1, this.peekAmount);
-    const peekHoverWanted = (peekWanted && this.cursorOverCat) || previewWanted ? 1 : 0;
+    // BigFish: keep the pop-out for a moment after the cursor slips off, so brushing the edge of
+    // her head does not flick it in and out on every cursor sample.
+    if (this.cursorOverCat) this.peekHoverHeldUntil = now + 450;
+    const peekHoverOver =
+      this.cursorOverCat || (this.catBreed === 'dafeiyu' && now < this.peekHoverHeldUntil);
+    const peekHoverWanted = (peekWanted && peekHoverOver) || previewWanted ? 1 : 0;
     this.peekHover = Math.max(0, Math.min(1, this.peekHoverSpring.step(peekHoverWanted, dt)));
     this.peekTransform = this.computePeekTransform2D();
     const wasScruffDemo = !this.isDragging && this.scruffDemoUntil > 0 && now >= this.scruffDemoUntil;

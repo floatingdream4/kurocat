@@ -582,6 +582,9 @@ export class DaFeiYuRenderer {
 
   public update(dt: number, now: number, layout: DaFeiYuLayout): void {
     this.bodyBob *= Math.exp(-12 * dt);
+    // Peeking from the screen edge: keystrokes (her own or an agent's auto-typing) must not bounce
+    // her head. The hidden body is rotated ~70 degrees there, so every key bob became a sideways jolt.
+    if ((layout.peekAmount ?? 0) > 0.08) this.bodyBob = 0;
 
     const isHappy = !layout.privacyMode && layout.petEnergy > 0.25;
     const isTyping =
