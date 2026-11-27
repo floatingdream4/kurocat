@@ -982,6 +982,8 @@ export class KuroCatEngine {
   }
 
   private buildDaFeiYuLayout(): DaFeiYuLayout {
+    const clock = new Date();
+    const hour = clock.getHours();
     const mx = this.mouseBaseX + this.mouseOffsetX;
     const my = this.mouseBaseY + this.mouseOffsetY;
     // Mouse always stays cat-facing (#92) even when keyboard faces the viewer
@@ -1036,6 +1038,12 @@ export class KuroCatEngine {
         this.asleep || this.mediaActive
           ? 0
           : Math.max(0, Math.min(1, (performance.now() - this.lastInputAt - 255_000) / 45_000)),
+      idleMs: this.asleep || this.mediaActive ? 0 : performance.now() - this.lastInputAt,
+      lateNight: hour >= 23 || hour < 5,
+      // Afternoon tea from 15:00 to 15:30 local time
+      teaTime: hour === 15 && clock.getMinutes() < 30,
+      gaming: this.gameActive,
+      pettingAt: this.lastPetStrokeAt,
       peekAmount: Math.max(0, Math.min(1, this.peekAmount)),
     };
   }
@@ -1222,6 +1230,7 @@ export class KuroCatEngine {
   private petStrokeCount = 0;
   private lastPetMoveAt = -10000;
   private petEnergy = 0;
+  private lastPetStrokeAt = -10000;
   private squintAmount = 0;
   private earTwitchLeft = 0;
   private earTwitchRight = 0;
@@ -1359,7 +1368,9 @@ export class KuroCatEngine {
   }
 
   public setGameActive(active: boolean): void {
-    this.gameActive = Boolean(active);
+    const next = Boolean(active);
+    if (next !== this.gameActive && this.catBreed === 'dafeiyu') this.wakeAction(performance.now());
+    this.gameActive = next;
   }
 
   private computePacingTier(now: number): RenderPacingTier {
@@ -1696,6 +1707,19 @@ export class KuroCatEngine {
       this.dafeiyu.setWaiting(now + ttlMs);
     } else {
       this.dafeiyu.clearWaiting();
+    }
+    this.wakeAction(now);
+  }
+
+  /** AI Companion: an agent hit an error - BigFish panics (hands on cheeks, sweat drops). */
+  public setAgentError(active: boolean, ttlMs = 6_500): void {
+    if (this.catBreed !== 'dafeiyu') return;
+    const now = performance.now();
+    if (active) {
+      this.asleep = false;
+      this.dafeiyu.setPanic(now + ttlMs);
+    } else {
+      this.dafeiyu.clearPanic();
     }
     this.wakeAction(now);
   }
@@ -2469,6 +2493,7 @@ export class KuroCatEngine {
               this.nextHeartAt = Math.min(this.nextHeartAt, now + 180);
             } else {
               this.petEnergy = Math.min(1, this.petEnergy + dist * 0.015);
+              this.lastPetStrokeAt = now;
               if (this.petEnergy > 0.55) {
                 this.hadHeartyPet = true;
               }

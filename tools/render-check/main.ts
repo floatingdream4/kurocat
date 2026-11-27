@@ -33,7 +33,25 @@ const scs: Sc[] = [
   { name: '14 movie mode disturbed - regression', stopAt: 1500, setup: noGreet,
     tick: (r, L, t, now) => { L.watching = true; if (t > 900 && !r._a) { r._a = 1; r.disturb(0.4, now); r.disturb(0.4, now); } } },
   { name: '15 typing - regression', stopAt: 1300, setup: noGreet,
-    tick: (r, L, t) => { const n = Math.floor(t / 110); if (n !== r._n) { r._n = n; const right = n % 2; r.onKeyDown(0x41 + (n % 20), { x: right ? 280 : 170, y: 350 }, L, false, false); r.onKeyUp(0x41 + (n % 20)); } } },
+    tick: (r, L, t) => { const n = Math.floor(t / 110); if (n !== r._n) { r._n = n; const right = n % 2; r.onKeyDown(0x41 + (n % 20), { x: right ? 280 : 170, y: 350 }, L, false, false); r.onKeyUp(0x41 + (n % 20)); } } },  // Batch 2 and 3: new frames and props
+  { name: '16 agent error (panic)', stopAt: 1300, setup: (r) => { noGreet(r); r.setPanic(performance.now() + 60000); } },
+  { name: '17 yawn (idle, more often at night)', stopAt: 1500, setup: (r) => { noGreet(r); r.nextYawnOkAt = 1e12; },
+    tick: (r, L, t, now) => { L.idleMs = 30000 + t; if (t > 200 && !r._y) { r._y = 1; r.startAct('yawn', now, 2600); } } },
+  { name: '18 reading a book (idle 1 min+)', stopAt: 1200, setup: (r, t0) => { noGreet(r); r.nextYawnOkAt = 1e12; r.reading = true; r.readingSince = t0; },
+    tick: (r, L, t) => { L.idleMs = 90000 + t; } },
+  { name: '19 afternoon tea: holding the cup', stopAt: 1500, setup: (r) => { noGreet(r); r.nextYawnOkAt = 1e12; r.nextReadOkAt = 1e12; },
+    tick: (r, L, t) => { L.teaTime = true; L.idleMs = 5000 + t; } },
+  { name: '20 afternoon tea: sipping', stopAt: 6930, setup: (r) => { noGreet(r); r.nextYawnOkAt = 1e12; r.nextReadOkAt = 1e12; },
+    tick: (r, L, t) => { L.teaTime = true; L.idleMs = 5000 + t; } },
+  { name: '21 petted: tsundere first', stopAt: 1100, setup: noGreet,
+    tick: (r, L, t, now) => { if (t > 300) { L.petEnergy = 0.8; L.pettingAt = now; } } },
+  { name: '22 petted on: warms up (happy)', stopAt: 2800, setup: noGreet,
+    tick: (r, L, t, now) => { if (t > 300) { L.petEnergy = 0.8; L.pettingAt = now; } } },
+  { name: '23 gaming: headset', stopAt: 1200, setup: noGreet, tick: (r, L) => { L.gaming = true; } },
+  { name: '24 gaming: headset + typing', stopAt: 1300, setup: noGreet,
+    tick: (r, L, t) => { L.gaming = true; const n = Math.floor(t / 110); if (n !== r._n) { r._n = n; const right = n % 2; r.onKeyDown(0x41 + (n % 20), { x: right ? 280 : 170, y: 350 }, L, false, false); r.onKeyUp(0x41 + (n % 20)); } } },
+  { name: '25 gaming: headset + error panic', stopAt: 1300, setup: (r) => { noGreet(r); r.setPanic(performance.now() + 60000); },
+    tick: (r, L) => { L.gaming = true; } },
 ];
 const ROWS = Math.ceil(scs.length / COLS);
 const cv = document.getElementById('c') as HTMLCanvasElement;

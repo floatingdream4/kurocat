@@ -12,6 +12,6 @@ SERVER=$!
 trap 'kill $SERVER 2>/dev/null || true' EXIT
 sleep 1
 "$CHROME" --headless=new --no-sandbox --disable-gpu --hide-scrollbars \
-  --window-size=2100,1320 --virtual-time-budget=8000 \
+  --window-size=2100,2200 --virtual-time-budget=8000 \
   --screenshot="$OUT" "http://localhost:$PORT/index.html" >/dev/null 2>&1
 echo "wrote $OUT"

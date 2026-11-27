@@ -35,6 +35,7 @@ export interface AgentCompanionTarget {
   setAgentCurious?(active: boolean, ttlMs?: number): void;
   setAgentWaiting?(active: boolean, ttlMs?: number): void;
   celebrateAgentDone?(): void;
+  setAgentError?(active: boolean, ttlMs?: number): void;
 }
 
 // Natural coding keystroke VKs (home-row letters, symbols, space, enter, backspace)
@@ -125,6 +126,8 @@ export class AgentCompanionController {
 
     const status = (ev.status || 'idle').toLowerCase() as AgentStatusKind;
     this.activeStatus = status;
+    // Any new status ends the error panic; 'error' itself starts it again below
+    target?.setAgentError?.(false);
 
     switch (status) {
       case 'working': {
@@ -187,6 +190,7 @@ export class AgentCompanionController {
         target?.setAgentCurious?.(false);
         target?.setAgentWaiting?.(false);
         target?.triggerCrossDemo();
+        target?.setAgentError?.(true);
         this.showBubble(ev.source, ev.text || '任务出错了', 'error');
         this.scheduleTtlClear(ev.ttlMs ?? 8_500);
         if (ev.sound !== false && this.allowSound()) {

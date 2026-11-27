@@ -8,9 +8,31 @@ import watchUrl from './assets/dafeiyu/notail_watch.png';
 import angryUrl from './assets/dafeiyu/notail_angry.png';
 import colaUrl from './assets/dafeiyu/prop_cola.png';
 import popcornUrl from './assets/dafeiyu/prop_popcorn.png';
+import panicUrl from './assets/dafeiyu/notail_panic.png';
+import yawnUrl from './assets/dafeiyu/notail_yawn.png';
+import readUrl from './assets/dafeiyu/notail_read.png';
+import teaUrl from './assets/dafeiyu/notail_tea.png';
+import tsunUrl from './assets/dafeiyu/notail_tsun.png';
+import headsetUrl from './assets/dafeiyu/prop_headset.png';
+import bookUrl from './assets/dafeiyu/prop_book.png';
+import teacupUrl from './assets/dafeiyu/prop_teacup.png';
 
-type DaFeiYuExpr = 'idle' | 'blink' | 'shy' | 'happy' | 'curious' | 'sleep' | 'watch' | 'angry';
-type DaFeiYuProp = 'cola' | 'popcorn';
+type DaFeiYuExpr =
+  | 'idle'
+  | 'blink'
+  | 'shy'
+  | 'happy'
+  | 'curious'
+  | 'sleep'
+  | 'watch'
+  | 'angry'
+  | 'panic'
+  | 'yawn'
+  | 'read'
+  | 'tea'
+  | 'tsun';
+/** Hand-held props, plus the headset overlay (a 224x278 layer drawn on top of any frame). */
+type DaFeiYuProp = 'cola' | 'popcorn' | 'book' | 'teacup' | 'headset';
 
 export interface DaFeiYuLayout {
   logicalW: number;
@@ -42,9 +64,19 @@ export interface DaFeiYuLayout {
   dragVelX?: number;
   /** 0..1 ramp over the last ~45s before she falls asleep (nodding off). */
   drowsy?: number;
+  /** Milliseconds since the last system-wide input (0 while asleep or watching). */
+  idleMs?: number;
+  /** Local time is late at night (yawns come more often). */
+  lateNight?: boolean;
+  /** Local afternoon tea window: she holds a teacup and sips from it while you are not typing. */
+  teaTime?: boolean;
+  /** A game is in the foreground: she wears a headset. */
+  gaming?: boolean;
+  /** performance.now() of the last real petting stroke over her (not agent/demo happiness). */
+  pettingAt?: number;
 }
 
-type DaFeiYuAct = 'wave' | 'cheer' | 'thumbs' | 'stretch';
+type DaFeiYuAct = 'wave' | 'cheer' | 'thumbs' | 'stretch' | 'yawn';
 
 interface ConfettiBit {
   x: number;
@@ -199,6 +231,20 @@ export class DaFeiYuRenderer {
   private wasDragging = false;
   // Nodding off shortly before sleep
   private drowsyClosed = false;
+  // Agent error: flustered panic face, hands on cheeks, sweat drops
+  private panicSince = -10000;
+  private panicUntil = -10000;
+  // Idle pastimes: random yawns, reading a book, afternoon tea
+  private nextIdleRollAt = 0;
+  private nextYawnOkAt = 0;
+  private reading = false;
+  private readingSince = -10000;
+  private nextReadOkAt = 0;
+  private holdingTea = false;
+  private teaSince = -10000;
+  // Tsundere petting: looks away and pouts first, only warms up if you keep petting
+  private lastPetAt = -10000;
+  private tsunUntil = -10000;
   private confetti: ConfettiBit[] = [];
   private lastCenterX = 192;
 
@@ -223,6 +269,11 @@ export class DaFeiYuRenderer {
         sleep: mk(sleepUrl),
         watch: mk(watchUrl),
         angry: mk(angryUrl),
+        panic: mk(panicUrl),
+        yawn: mk(yawnUrl),
+        read: mk(readUrl),
+        tea: mk(teaUrl),
+        tsun: mk(tsunUrl),
       };
     }
     return this.sprites;
@@ -236,7 +287,13 @@ export class DaFeiYuRenderer {
         img.src = src;
         return img;
       };
-      this.props = { cola: mk(colaUrl), popcorn: mk(popcornUrl) };
+      this.props = {
+        cola: mk(colaUrl),
+        popcorn: mk(popcornUrl),
+        book: mk(bookUrl),
+        teacup: mk(teacupUrl),
+        headset: mk(headsetUrl),
+      };
     }
     return this.props;
   }
@@ -306,6 +363,20 @@ export class DaFeiYuRenderer {
 
   public clearWaiting(): void {
     this.waitingUntil = -10000;
+  }
+
+  /** Agent hit an error: panic face with hands on her cheeks and sweat drops until `untilMs`. */
+  public setPanic(untilMs: number): void {
+    const now = performance.now();
+    if (now >= this.panicUntil) {
+      this.panicSince = now;
+      this.bodyBob = Math.min(1.2, this.bodyBob + 0.9);
+    }
+    this.panicUntil = untilMs;
+  }
+
+  public clearPanic(): void {
+    this.panicUntil = -10000;
   }
 
   private startAct(kind: DaFeiYuAct, now: number, dur: number): void {
@@ -617,6 +688,56 @@ export class DaFeiYuRenderer {
       this.drowsyClosed = false;
     }
 
+    // Agent error: a few sweat drops fly off while she panics
+    const panicking = quiet && now < this.panicUntil;
+    if (panicking && Math.random() < 3.2 * dt) {
+      const head = this.computeGeom(now, layout).spritePointToWorld(Math.random() < 0.5 ? 0.24 : 0.76, 0.36);
+      this.spawnParticles(head.x, head.y, 1, true);
+    }
+
+    // Tsundere petting: every new petting session starts with ~1.7s of looking away and pouting
+    const pettingNow = now - (layout.pettingAt ?? -10000) < 400;
+    if (pettingNow) {
+      if (now - this.lastPetAt > 4000) this.tsunUntil = now + 1700;
+      this.lastPetAt = now;
+    }
+    const tsun = isHappy && quiet && now < this.tsunUntil && (!this.act || this.act.kind !== 'cheer');
+
+    // Idle pastimes (only while she is left alone): random yawns, reading a book, afternoon tea
+    const idleMs = layout.idleMs ?? 0;
+    const alone =
+      quiet && !isHappy && !isTyping && !dragging && !mouseMode && !attentive && !panicking && !layout.gaming;
+    if (this.reading && (!alone || idleMs < 1000 || drowsy > 0.02 || layout.teaTime)) {
+      this.reading = false;
+      this.nextReadOkAt = now + 60000;
+    }
+    if (alone && !this.act && now >= this.nextIdleRollAt) {
+      this.nextIdleRollAt = now + 1000;
+      const beforeDrowsy = idleMs < 250_000;
+      if (beforeDrowsy && idleMs > 20_000 && now >= this.nextYawnOkAt && !this.reading) {
+        // About once every 3 minutes of idling by day, every 45 seconds late at night
+        if (Math.random() < (layout.lateNight ? 1 / 45 : 1 / 180)) {
+          this.startAct('yawn', now, 2600);
+          this.nextYawnOkAt = now + 40000;
+        }
+      }
+      if (
+        !this.act &&
+        !this.reading &&
+        !layout.teaTime &&
+        beforeDrowsy &&
+        idleMs > 60_000 &&
+        now >= this.nextReadOkAt &&
+        Math.random() < 1 / 25
+      ) {
+        this.reading = true;
+        this.readingSince = now;
+      }
+    }
+    const teaNow = Boolean(layout.teaTime) && alone && now - this.lastKeyAt > 2500 && !this.act;
+    if (teaNow && !this.holdingTea) this.teaSince = now;
+    this.holdingTea = teaNow;
+
     // 1) Calm 2.8s typing-speed window + hysteresis-locked blush mood (min 2.2s dwell, zero flicker!)
     while (this.keyTimes.length && now - this.keyTimes[0] > 2800) {
       this.keyTimes.shift();
@@ -668,7 +789,7 @@ export class DaFeiYuRenderer {
     }
 
     const charX = layout.is108 ? 268 : 192;
-    if (isHappy && Math.random() < 0.06) {
+    if (isHappy && !tsun && Math.random() < 0.06) {
       this.spawnParticles(charX + this.bodyShiftX, 120, 1, false);
     } else if (!layout.privacyMode && this.moodTier === 2 && Math.random() < 0.025) {
       this.spawnParticles(charX + this.bodyShiftX, 124, 1, false);
@@ -701,6 +822,10 @@ export class DaFeiYuRenderer {
         ? 0.055
         : watching && now < this.angryUntil
           ? Math.sin(now * 0.045) * 0.035
+          : tsun
+            ? -0.085
+          : panicking
+            ? Math.sin(now * 0.05) * 0.03
           : this.drowsyClosed
             ? 0.06
             : this.stareShy
@@ -710,6 +835,8 @@ export class DaFeiYuRenderer {
                 : 0;
       if (this.drowsyClosed) {
         this.bodyDiveY += (7 - this.bodyDiveY) * (1 - Math.exp(-2.4 * dt));
+      } else if (this.reading) {
+        this.bodyDiveY += (4 - this.bodyDiveY) * (1 - Math.exp(-3 * dt));
       } else {
         this.bodyDiveY *= Math.exp(-9 * dt);
       }
@@ -1148,17 +1275,25 @@ export class DaFeiYuRenderer {
       !layout.privacyMode && !isHappy && !isAsleep && !isWatching && now < this.curiousUntil;
     const isWaiting = !layout.privacyMode && !isAsleep && !isWatching && now < this.waitingUntil;
     const actKind = this.act ? this.act.kind : null;
+    const isPanic = !layout.privacyMode && !isAsleep && !isWatching && now < this.panicUntil;
+    const isTsun = isHappy && !isAsleep && !isWatching && now < this.tsunUntil && actKind !== 'cheer';
+    const yawnP = actKind === 'yawn' && this.act ? (now - this.act.t0) / this.act.dur : -1;
     let exprKey: DaFeiYuExpr = 'idle';
     if (layout.privacyMode) exprKey = 'blink';
     else if (isAsleep) exprKey = 'sleep';
     else if (isWatching) exprKey = now < this.angryUntil ? 'angry' : 'watch';
     else if (layout.dragging) exprKey = 'curious';
+    else if (isTsun) exprKey = 'tsun';
     else if (isHappy || actKind === 'cheer' || actKind === 'wave') exprKey = 'happy';
     else if (actKind === 'thumbs' || actKind === 'stretch') exprKey = 'shy';
+    else if (actKind === 'yawn') exprKey = yawnP > 0.12 && yawnP < 0.86 ? 'yawn' : 'blink';
     else if (now < this.startleUntil) exprKey = 'curious';
+    else if (isPanic) exprKey = 'panic';
     else if (isWaiting) exprKey = isBlinking ? 'blink' : 'idle';
     else if (isCurious) exprKey = 'curious';
     else if (this.stareShy) exprKey = 'shy';
+    else if (this.teaSip(now) > 0.35) exprKey = 'tea';
+    else if (this.reading) exprKey = 'read';
     else if (this.moodTier === 2) exprKey = 'happy';
     else if (this.moodTier === 1) exprKey = 'shy';
     else if (this.drowsyClosed || isBlinking) exprKey = 'blink';
@@ -1226,8 +1361,24 @@ export class DaFeiYuRenderer {
           }
         }
       }
+
+      // Gaming headset: a 224x278 overlay aligned with every frame
+      if (layout.gaming && !layout.privacyMode) {
+        const headset = this.ensureProps().headset;
+        if (headset.complete && headset.naturalWidth > 0) {
+          ctx.drawImage(headset, -g.drawW * 0.5, -g.drawH + g.pivotOff, g.drawW, g.drawH);
+        }
+      }
       ctx.restore();
     }
+  }
+
+  /** 0..1 while she lifts the teacup to her lips (one sip every 9s during tea time). */
+  private teaSip(now: number): number {
+    if (!this.holdingTea) return 0;
+    const ph = ((now - this.teaSince) % 9000) / 9000;
+    if (ph < 0.62 || ph > 0.92) return 0;
+    return Math.sin(Math.PI * ((ph - 0.62) / 0.3));
   }
 
   /** Layer 2 (drawn AFTER keyboard & mouse): water ripples, animated whale tail, plump round hands, particles. */
@@ -1399,6 +1550,10 @@ export class DaFeiYuRenderer {
     let rTargetX: number;
     let rTargetY: number;
     let heldProp: DaFeiYuProp | null = null;
+    const isPanic = !layout.privacyMode && !layout.asleep && !watching && now < this.panicUntil;
+    const isTsun = isHappy && !layout.asleep && !watching && now < this.tsunUntil && actKind !== 'cheer';
+    const sip = this.teaSip(now);
+    const book = this.reading ? g.spritePointToWorld(0.5, 0.735) : null;
     if (layout.privacyMode) {
       const eyeL = g.spritePointToWorld(0.390, 0.476);
       const eyeR = g.spritePointToWorld(0.598, 0.476);
@@ -1407,6 +1562,13 @@ export class DaFeiYuRenderer {
       lTargetY = eyeL.y + shyBob;
       rTargetX = eyeR.x;
       rTargetY = eyeR.y - shyBob;
+    } else if (isTsun) {
+      // Arms folded in front of her chest while she pretends not to enjoy it
+      const chest = g.spritePointToWorld(0.5, 0.7);
+      lTargetX = chest.x + 12;
+      lTargetY = chest.y + 2;
+      rTargetX = chest.x - 12;
+      rTargetY = chest.y + 6;
     } else if (isHappy || actKind === 'cheer') {
       // Agent-done cheer throws both arms high; ordinary petting keeps the small happy bob
       const big = actKind === 'cheer';
@@ -1430,6 +1592,13 @@ export class DaFeiYuRenderer {
       } else if (dragging) {
         lTargetX = shL.x - 13 - this.dragSwing * 70;
         lTargetY = shL.y + 40;
+      } else if (isPanic) {
+        const cheek = g.spritePointToWorld(0.3, 0.585);
+        lTargetX = cheek.x + Math.sin(now * 0.055) * 1.6;
+        lTargetY = cheek.y;
+      } else if (book) {
+        lTargetX = book.x - 22;
+        lTargetY = book.y + 6;
       } else {
         lTargetX = shL.x - 15;
         lTargetY = shL.y + 34;
@@ -1451,6 +1620,16 @@ export class DaFeiYuRenderer {
       } else if (dragging) {
         rTargetX = shR.x + 13 - this.dragSwing * 70;
         rTargetY = shR.y + 40;
+      } else if (actKind === 'yawn') {
+        // Covers her mouth for the big middle part of the yawn
+        const cover = Math.sin(Math.PI * Math.max(0, Math.min(1, (actT - 0.08) / 0.84)));
+        const mouth = g.spritePointToWorld(0.56, 0.61);
+        rTargetX = shR.x + 15 + (mouth.x - shR.x - 15) * cover;
+        rTargetY = shR.y + 34 + (mouth.y - shR.y - 34) * cover;
+      } else if (isPanic) {
+        const cheek = g.spritePointToWorld(0.7, 0.585);
+        rTargetX = cheek.x - Math.sin(now * 0.055) * 1.6;
+        rTargetY = cheek.y;
       } else if (isWaiting) {
         // Beckoning wave while an agent waits for the user
         const w = now * 0.012;
@@ -1462,6 +1641,17 @@ export class DaFeiYuRenderer {
         rTargetX = shR.x + 26;
         rTargetY = shR.y + 14 - sip * 12;
         heldProp = this.propKind;
+      } else if (book) {
+        rTargetX = book.x + 22;
+        rTargetY = book.y + 6;
+      } else if (this.holdingTea) {
+        // Afternoon tea: cup held at chest height, lifted to her lips for a sip every 9s
+        const lips = g.spritePointToWorld(0.57, 0.62);
+        const restX = shR.x + 22;
+        const restY = shR.y + 16;
+        rTargetX = restX + (lips.x - restX) * sip;
+        rTargetY = restY + (lips.y + 14 - restY) * sip;
+        heldProp = 'teacup';
       } else {
         rTargetX = shR.x + 15;
         rTargetY = shR.y + 34;
@@ -1475,6 +1665,20 @@ export class DaFeiYuRenderer {
     this.rightHand.y += (rTargetY - this.rightHand.y) * hLerp;
     this.leftHand.squash *= Math.exp(-14 * dt);
     this.rightHand.squash *= Math.exp(-14 * dt);
+
+    if (book) {
+      // The book sits between her hands, so it goes under the arms
+      const img = this.ensureProps().book;
+      if (img.complete && img.naturalWidth > 0) {
+        const fade = Math.min(1, (now - this.readingSince) / 300);
+        const bh = 46;
+        const bw = (bh * img.naturalWidth) / img.naturalHeight;
+        ctx.save();
+        ctx.globalAlpha = fade;
+        ctx.drawImage(img, book.x - bw * 0.5, book.y - bh * 0.55 + (1 - fade) * 10, bw, bh);
+        ctx.restore();
+      }
+    }
 
     const maxMouseReach = layout.is108 ? 96 : 88;
     this.drawChubbyArm(
@@ -1501,7 +1705,7 @@ export class DaFeiYuRenderer {
     if (heldProp) {
       const img = this.ensureProps()[heldProp];
       if (img.complete && img.naturalWidth > 0) {
-        const ph = 50;
+        const ph = heldProp === 'teacup' ? 30 : 50;
         const pw = (ph * img.naturalWidth) / img.naturalHeight;
         ctx.drawImage(img, this.rightHand.x - pw * 0.5 + 3, this.rightHand.y - ph + 12, pw, ph);
       }
