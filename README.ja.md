@@ -14,21 +14,30 @@
   </p>
 
   <p>
-    <a href="https://qianyi.one/kurocat/?lang=ja"><img src="https://img.shields.io/badge/Website-qianyi.one%2Fkurocat-d4f044?style=flat-square&logo=googlechrome&logoColor=111" alt="Official Website" /></a>
-    <a href="https://github.com/qianyiai/kurocat/releases/latest"><img src="https://img.shields.io/github/v/release/qianyiai/kurocat?style=flat-square&color=38bdf8" alt="Latest Release" /></a>
-    <a href="https://github.com/qianyiai/kurocat/blob/main/LICENSE"><img src="https://img.shields.io/github/license/qianyiai/kurocat?style=flat-square&color=22c55e" alt="MIT License" /></a>
+    <a href="https://kurocat.org/ja/"><img src="https://img.shields.io/badge/Website-kurocat.org-d4f044?style=flat-square&logo=googlechrome&logoColor=111" alt="Official Website" /></a>
+    <a href="https://github.com/qianyiai/KuroCat/releases/latest"><img src="https://img.shields.io/github/v/release/qianyiai/KuroCat?style=flat-square&color=38bdf8" alt="Latest Release" /></a>
+    <a href="https://github.com/qianyiai/KuroCat/blob/main/LICENSE"><img src="https://img.shields.io/github/license/qianyiai/KuroCat?style=flat-square&color=22c55e" alt="MIT License" /></a>
     <img src="https://img.shields.io/badge/Platform-Win11%2F10%2F7%20%7C%20macOS%20%7C%20Linux%20%7C%20Android-818cf8?style=flat-square" alt="Cross Platform" />
   </p>
 
   <p>
-    <a href="https://qianyi.one/kurocat/?lang=ja#playground"><strong>🌐 Web 3D リアルタイム体験</strong></a> &nbsp;·&nbsp;
-    <a href="#download"><strong>📥 ダウンロード</strong></a> &nbsp;·&nbsp;
-    <a href="#mcp"><strong>🤖 AI / MCP</strong></a> &nbsp;·&nbsp;
+    <a href="https://kurocat.org/ja/"><strong>🌐 公式サイト＆3D体験</strong></a> &nbsp;·&nbsp;
+    <a href="https://kurocat.org/ja/download/"><strong>📥 公式ダウンロード</strong></a> &nbsp;·&nbsp;
+    <a href="https://kurocat.org/ja/vs/bongo-cat/"><strong>⚡ vs Bongo Cat</strong></a> &nbsp;·&nbsp;
+    <a href="https://kurocat.org/ja/obs/"><strong>🎥 OBS 透過配信</strong></a> &nbsp;·&nbsp;
+    <a href="https://kurocat.org/ja/mcp/"><strong>🤖 AI / MCP</strong></a> &nbsp;·&nbsp;
     <a href="https://github.com/qianyiai/homebrew-tap"><strong>🍺 Homebrew</strong></a>
   </p>
 
-  <sub>🔒 公式配布チャネルのみ：<a href="https://github.com/qianyiai/kurocat">GitHub</a> · <a href="https://qianyi.one/kurocat/?lang=ja">qianyi.one/kurocat</a> · <a href="https://github.com/qianyiai/homebrew-tap">Homebrew Tap</a>（第三者ミラーサイトは非公式です）</sub>
+  <sub>🔒 唯一の公式チャネル：<a href="https://kurocat.org/ja/"><strong>kurocat.org（公式サイト）</strong></a> · <a href="https://github.com/qianyiai/KuroCat">GitHub</a> · <a href="https://github.com/qianyiai/homebrew-tap">Homebrew Tap</a> · <a href="https://kurocat.org/ja/security/">偽サイト警告</a></sub>
 </div>
+
+> [!CAUTION]
+> **公式サイトのご案内および偽サイト `kurocat.net` に関するセキュリティ警告**
+>
+> **KuroCat の唯一の公式サイトは [`https://kurocat.org/ja/`](https://kurocat.org/ja/)**、公式リポジトリは `github.com/qianyiai/KuroCat` です。
+>
+> 作者と無関係ななりすましサイト **`kurocat.net`** が、非公式の **`64.25 MB` `KuroCat.v5.1.0.zip`**（SHA-256: `19ad10c48a7448584f1d00aa086f52b38231bacd659f04e83d3cefc60209796d`、不明な `35.92 MB KuroCat.exe`＋`50 MiB` の異常パディングファイル入り）を配布しています。公式 Windows 10/11 版は **`約 2.4 MB`** のインストーラーのみです。**`kurocat.net` から絶対にダウンロード・実行しないでください。** 詳細は [**公式セキュリティ警告**](https://kurocat.org/ja/security/) をご確認ください。
 
 <br />
 
@@ -37,27 +46,27 @@
 <table>
   <tr>
     <td align="center" width="52%" valign="top">
-      <a href="https://qianyi.one/kurocat/?lang=ja#playground" target="_blank" rel="noopener">
+      <a href="https://kurocat.org/ja/#playground" target="_blank" rel="noopener">
         <img src="docs/wake-pet-demo-ja.webp" alt="KuroCat 3D 黒猫デモ（居眠り → 起床時の不機嫌 → なでなでゴロゴロ）" width="380" />
       </a>
       <br />
-      <strong>🐈‍⬛ <a href="https://qianyi.one/kurocat/?lang=ja#playground">公式サイトで 3D リアルタイム体験（タイピング＆なでなで）→</a></strong>
+      <strong>🐈‍⬛ <a href="https://kurocat.org/ja/#playground">公式サイトで 3D リアルタイム体験（タイピング＆なでなで）→</a></strong>
       <br />
       <sub>
         居眠り → 起こされて不機嫌 → なでなでゴロゴロ ·
-        <a href="https://qianyi.one/kurocat/media/wake-pet-9s-ja.mp4">音声付き 9 秒 MP4</a>
+        <a href="https://kurocat.org/media/wake-pet-9s-ja.mp4">音声付き 9 秒 MP4</a>
       </sub>
     </td>
     <td align="center" width="48%" valign="top">
-      <a href="https://qianyi.one/kurocat/?lang=ja#whale-demo" target="_blank" rel="noopener">
+      <a href="https://kurocat.org/ja/#whale-demo" target="_blank" rel="noopener">
         <img src="docs/whale-demo-ja.webp" alt="KuroCat クジラ娘（大肥魚）14 秒デモ動画" width="272" />
       </a>
       <br />
-      <strong>🐳 <a href="https://qianyi.one/kurocat/?lang=ja#whale-demo">クジラ娘 1080P 60fps デモ動画を見る →</a></strong>
+      <strong>🐳 <a href="https://kurocat.org/ja/#whale-demo">クジラ娘 1080P 60fps デモ動画を見る →</a></strong>
       <br />
       <sub>
         マウス＋タイピング＋尻尾同時アクション · 照れ笑い · パスワード目隠し ·
-        <a href="https://qianyi.one/kurocat/media/whale-douyin-14s-ja.mp4">高速 MP4 ミラー</a>
+        <a href="https://kurocat.org/media/whale-douyin-14s-ja.mp4">高速 MP4 ミラー</a>
       </sub>
     </td>
   </tr>
@@ -67,18 +76,18 @@
 
 <a id="download"></a>
 
-## 📥 クイックダウンロード（`v5.1.2`）
+## 📥 クイックダウンロード（`v5.1.3`）
 
-> ✨ **v5.1.2 の新機能**：**AI コーディング相棒フック**（Claude Code / Codex / DeepSeek / Cursor 等）、**MCP 2D/3D 輪郭カスタム（10 ツール＋16 スポット）**、単一インスタンス多重起動防止を追加。詳細は [Releases](https://github.com/qianyiai/kurocat/releases) をご覧ください。
+> ✨ **v5.1.3 の新機能**：全プラットフォーム対応 **20%–100% 不透明度調整**、**KuroCat Live クロマキー専用配信窓**、**2D/3D/MCP 22 項目フル顔造形**、**実録猫ゴロゴロ音＆打鍵サウンド**、**端からチラ見（Edge-Peek）＆新待機アクション**、**Android v5.1.3 機能同期** を追加し、管理者再起動・ドラッグ・金融パスワード保護・リモートデスクトップ退避・macOS 入力監視・視聴者視点マウス向きを修正（#98 #80 #87 #40 #63 #92）。詳細は [Releases](https://github.com/qianyiai/KuroCat/releases) をご覧ください。
 
 | プラットフォーム | 推奨パッケージ | サイズ | ダウンロード |
 | --- | --- | :---: | --- |
-| **🪟 Windows 10 / 11** | x64 インストーラー（65% / 108 キー切替内蔵） | 2.15 MB | [**GitHub**](https://github.com/qianyiai/kurocat/releases/download/v5.1.2/KuroCat-5.1.2-x64-setup.exe) · [**高速 CDN**](https://qianyi.one/kurocat/?lang=ja#download) |
-| **🍎 macOS 10.15+** | Apple Silicon (M1–M4) &amp; Intel ユニバーサル DMG | 5.93 MB | [**GitHub**](https://github.com/qianyiai/kurocat/releases/download/v5.1.2/KuroCat-v5.1.2-macos-universal.dmg) · [**高速 CDN**](https://qianyi.one/kurocat/releases/v5.1.2/KuroCat-v5.1.2-macos-universal.dmg) |
-| **🐧 Linux (x86_64)** | Ubuntu 22.04+ / Debian 12+ | 2.38 MB | [**`.deb`**](https://github.com/qianyiai/kurocat/releases/download/v5.1.2/KuroCat-v5.1.2-linux-amd64.deb) · [**`.AppImage`**](https://github.com/qianyiai/kurocat/releases/download/v5.1.2/KuroCat-v5.1.2-linux-amd64.AppImage) · [**高速 CDN**](https://qianyi.one/kurocat/?lang=ja#linux-download) |
-| **🐧 Linux (ARM64)** | ARM64 / Raspberry Pi | 2.34 MB | [**`.deb`**](https://github.com/qianyiai/kurocat/releases/download/v5.1.2/KuroCat-v5.1.2-linux-arm64.deb) · [**`.AppImage`**](https://github.com/qianyiai/kurocat/releases/download/v5.1.2/KuroCat-v5.1.2-linux-arm64.AppImage) · [**高速 CDN**](https://qianyi.one/kurocat/?lang=ja#linux-download) |
-| **🖥️ Windows 7 SP1** | x64 ポータブル（オフライン WebView2 109 同梱） | 178.94 MB | [**GitHub**](https://github.com/qianyiai/kurocat/releases/download/v5.1.2/KuroCat-v5.1.2-win7-x64-portable.zip) · [**高速 CDN**](https://qianyi.one/kurocat/releases/v5.1.2/KuroCat-v5.1.2-win7-x64-portable.zip) |
-| **🤖 Android** | Android APK | 5.05 MB | [**GitHub**](https://github.com/qianyiai/kurocat/releases/download/v5.1.2/KuroCat-v5.1.2-android.apk) · [**高速 CDN**](https://qianyi.one/kurocat/releases/v5.1.2/KuroCat-v5.1.2-android.apk) |
+| **🪟 Windows 10 / 11** | x64 インストーラー（65% / 108 キー切替内蔵） | 2.40 MB | [**GitHub**](https://github.com/qianyiai/KuroCat/releases/download/v5.1.3/KuroCat-5.1.3-x64-setup.exe) · [**高速 CDN**](https://kurocat.org/ja/#download) |
+| **🍎 macOS 10.15+** | Apple Silicon (M1–M4) &amp; Intel ユニバーサル DMG | 6.57 MB | [**GitHub**](https://github.com/qianyiai/KuroCat/releases/download/v5.1.3/KuroCat-v5.1.3-macos-universal.dmg) · [**高速 CDN**](https://kurocat.org/releases/v5.1.3/KuroCat-v5.1.3-macos-universal.dmg) |
+| **🐧 Linux (x86_64)** | Ubuntu 22.04+ / Debian 12+ | 2.66 MB | [**`.deb`**](https://github.com/qianyiai/KuroCat/releases/download/v5.1.3/KuroCat-v5.1.3-linux-amd64.deb) · [**`.AppImage`**](https://github.com/qianyiai/KuroCat/releases/download/v5.1.3/KuroCat-v5.1.3-linux-amd64.AppImage) · [**高速 CDN**](https://kurocat.org/ja/#linux-download) |
+| **🐧 Linux (ARM64)** | ARM64 / Raspberry Pi | 2.62 MB | [**`.deb`**](https://github.com/qianyiai/KuroCat/releases/download/v5.1.3/KuroCat-v5.1.3-linux-arm64.deb) · [**`.AppImage`**](https://github.com/qianyiai/KuroCat/releases/download/v5.1.3/KuroCat-v5.1.3-linux-arm64.AppImage) · [**高速 CDN**](https://kurocat.org/ja/#linux-download) |
+| **🖥️ Windows 7 SP1** | x64 ポータブル（オフライン WebView2 109 同梱） | 179.3 MB | [**GitHub**](https://github.com/qianyiai/KuroCat/releases/download/v5.1.3/KuroCat-v5.1.3-win7-x64-portable.zip) · [**高速 CDN**](https://kurocat.org/releases/v5.1.3/KuroCat-v5.1.3-win7-x64-portable.zip) |
+| **🤖 Android** | Android APK | 5.17 MB | [**GitHub**](https://github.com/qianyiai/KuroCat/releases/download/v5.1.3/KuroCat-v5.1.3-android.apk) · [**高速 CDN**](https://kurocat.org/releases/v5.1.3/KuroCat-v5.1.3-android.apk) |
 
 **🍺 macOS Homebrew ワンライン導入**（推奨・隔離属性を自動解除するため手動 `xattr` 不要）：
 
@@ -205,16 +214,16 @@ brew install --cask qianyiai/tap/kurocat
 
 ## 📈 リアルタイム成長グラフ
 
-<a href="https://qianyi.one/kurocat/?lang=ja#growth">
+<a href="https://kurocat.org/ja/#growth">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://qianyi.one/kurocat/api/growth-chart?theme=dark&amp;lang=ja" />
-    <source media="(prefers-color-scheme: light)" srcset="https://qianyi.one/kurocat/api/growth-chart?theme=light&amp;lang=ja" />
-    <img alt="KuroCat 累計ダウンロード数・GitHub Stars リアルタイム成長グラフ" src="https://qianyi.one/kurocat/api/growth-chart?theme=dark&amp;lang=ja" width="100%" />
+    <source media="(prefers-color-scheme: dark)" srcset="https://kurocat.org/api/growth-chart?theme=dark&amp;lang=ja" />
+    <source media="(prefers-color-scheme: light)" srcset="https://kurocat.org/api/growth-chart?theme=light&amp;lang=ja" />
+    <img alt="KuroCat 累計ダウンロード数・GitHub Stars リアルタイム成長グラフ" src="https://kurocat.org/api/growth-chart?theme=dark&amp;lang=ja" width="100%" />
   </picture>
 </a>
 
 <p align="center">
-  <sub>📡 全チャネル累計ダウンロード数と GitHub Stars を同期 · <a href="https://qianyi.one/kurocat/?lang=ja#growth">公式サイトでインタラクティブ版を見る →</a></sub>
+  <sub>📡 全チャネル累計ダウンロード数と GitHub Stars を同期 · <a href="https://kurocat.org/ja/#growth">公式サイトでインタラクティブ版を見る →</a></sub>
 </p>
 
 ---
@@ -225,7 +234,7 @@ brew install --cask qianyiai/tap/kurocat
 <br />
 
 ```bash
-git clone https://github.com/qianyiai/kurocat.git
+git clone https://github.com/qianyiai/KuroCat.git
 cd kurocat
 npm install
 npm run tauri:dev

@@ -35,6 +35,7 @@ export interface DaFeiYuLayout {
   asleep?: boolean;
   /** True while a fullscreen video / slideshow is in the foreground (3D glasses + snacks mode). */
   watching?: boolean;
+  peekAmount?: number;
 }
 
 interface HandState {
@@ -136,6 +137,8 @@ export class DaFeiYuRenderer {
     relX: 84,
     relY: -36,
     activeWag: 0,
+    wagPhaseX: 0,
+    wagPhaseY: 0,
     slapAt: -10000,
     releaseAt: -10000,
     slapTargetX: 340,
@@ -473,8 +476,16 @@ export class DaFeiYuRenderer {
       this.spawnParticles(charX + this.bodyShiftX, 124, 1, false);
     }
 
+    const peekAmt = Math.max(0, Math.min(1, layout.peekAmount ?? 0));
+    const isPeeking = peekAmt > 0.08;
+
     // 2) Body spring physics
-    if (layout.privacyMode) {
+    if (isPeeking) {
+      // Keep head cleanly anchored on the peek pivot (no off-center mouse-lean shift or typing dive)
+      this.bodyShiftTarget = 0;
+      this.bodyTiltTarget = Math.sin(now * 0.0026) * 0.025;
+      this.bodyDiveY *= Math.exp(-10 * dt);
+    } else if (layout.privacyMode) {
       this.bodyShiftTarget = 0;
       const shySway =
         Math.sin(now * 0.0042) * 0.032 +
@@ -513,10 +524,12 @@ export class DaFeiYuRenderer {
     const activeMouseClick =
       !layout.privacyMode &&
       !isHappy &&
+      !isPeeking &&
       (layout.mouseLeft || layout.mouseRight || now - lastClickTs < 950);
     const activeKeyGaze =
       !layout.privacyMode &&
       !isHappy &&
+      !isPeeking &&
       (now - this.lastKeyGazeAt < 950 ||
         this.leftHand.heldVks.size > 0 ||
         this.rightHand.heldVks.size > 0 ||
@@ -525,7 +538,7 @@ export class DaFeiYuRenderer {
     let gazeTarget = !layout.privacyMode && !isHappy ? layout.cursor : null;
     if (activeKeyGaze && (!activeMouseClick || this.lastKeyGazeAt > lastClickTs)) {
       gazeTarget = { x: this.lastKeyPtX, y: this.lastKeyPtY };
-    } else if (!gazeTarget && (activeMouseClick || mouseMode)) {
+    } else if (!gazeTarget && !isPeeking && (activeMouseClick || mouseMode)) {
       gazeTarget = { x: layout.mouseBtnX, y: layout.mouseBtnY };
     }
 
@@ -559,10 +572,13 @@ export class DaFeiYuRenderer {
         : isTyping
           ? 0.0082
           : 0.0042;
-    const idleWag = Math.sin(now * wagSpeed) * (isHappy ? 0.34 : 0.16 + this.typingHeat * 0.16);
+    const wagRate = wagSpeed * 1000;
+    this.tail.wagPhaseX = (this.tail.wagPhaseX + dt * wagRate) % (Math.PI * 2);
+    this.tail.wagPhaseY = (this.tail.wagPhaseY + dt * wagRate * 1.15) % (Math.PI * 2);
+    const idleWag = Math.sin(this.tail.wagPhaseX) * (isHappy ? 0.34 : 0.16 + this.typingHeat * 0.16);
     const maxIdleOffX = Math.max(54, Math.min(86, layout.logicalW - 26 - tailRoot.x));
-    const idleOffX = maxIdleOffX + Math.sin(now * wagSpeed) * 9;
-    const idleOffY = -36 + Math.cos(now * wagSpeed * 1.15) * 7;
+    const idleOffX = maxIdleOffX + Math.sin(this.tail.wagPhaseX) * 9;
+    const idleOffY = -36 + Math.cos(this.tail.wagPhaseY) * 7;
 
     const tailAge = Math.max(0, now - this.tail.slapAt);
     const holdingSlap =
@@ -865,27 +881,41 @@ export class DaFeiYuRenderer {
   }
 
   /** Layer 1 (drawn BEFORE keyboard & mouse): waist-anchored whale tail + BigFish sprite + Live2D eyes + soft blush. */
-  public renderBody(ctx: CanvasRenderingContext2D, now: number, layout: DaFeiYuLayout): void {
+  public renderBody(
+    ctx: CanvasRenderingContext2D,
+    now: number,
+    layout: DaFeiYuLayout,
+    peekAmount = 0,
+  ): void {
     const g = this.computeGeom(now, layout);
     const isHappy = !layout.privacyMode && layout.petEnergy > 0.25;
     const isBlinking = now < this.blinkUntil;
+    const peekP = Math.max(0, Math.min(1, peekAmount));
 
     // Draw whale tail behind body sprite & keyboard so its root emerges naturally from her waist
     // and NEVER floats on top of the keyboard or detaches when shifting left for mouseMode (Fixes #11).
-    const tailRoot = g.spritePointToWorld(0.56, 0.785);
-    const tipX = tailRoot.x + this.tail.relX;
-    const tipY = tailRoot.y + this.tail.relY;
-    this.drawWhaleTail(
-      ctx,
-      tailRoot.x,
-      tailRoot.y,
-      tipX,
-      tipY,
-      this.tail.phase,
-      this.tail.activeWag,
-      layout.logicalW,
-      'back',
-    );
+    // Fade and hide smoothly while peeking from the screen edge so only her whale-hooded head shows.
+    if (peekP <= 0.35) {
+      const tailRoot = g.spritePointToWorld(0.56, 0.785);
+      const tipX = tailRoot.x + this.tail.relX;
+      const tipY = tailRoot.y + this.tail.relY;
+      ctx.save();
+      if (peekP > 0.05) {
+        ctx.globalAlpha *= Math.max(0, 1 - (peekP - 0.05) / 0.30);
+      }
+      this.drawWhaleTail(
+        ctx,
+        tailRoot.x,
+        tailRoot.y,
+        tipX,
+        tipY,
+        this.tail.phase,
+        this.tail.activeWag,
+        layout.logicalW,
+        'back',
+      );
+      ctx.restore();
+    }
 
     const isAsleep = !layout.privacyMode && !isHappy && Boolean(layout.asleep);
     const isWatching = !layout.privacyMode && !layout.asleep && Boolean(layout.watching);
@@ -905,9 +935,11 @@ export class DaFeiYuRenderer {
     const img = sprites[exprKey] || sprites.idle;
     if (img && img.complete && img.naturalWidth > 0) {
       ctx.save();
-      ctx.beginPath();
-      ctx.rect(0, 0, layout.logicalW, layout.kbCenterY - layout.kbHeight * 0.36);
-      ctx.clip();
+      if (peekP < 0.05) {
+        ctx.beginPath();
+        ctx.rect(0, 0, layout.logicalW, layout.kbCenterY - layout.kbHeight * 0.36);
+        ctx.clip();
+      }
       ctx.translate(g.charCenterX, g.pivotY);
       ctx.rotate(this.bodyTilt);
       ctx.scale(1 + this.bodyBob * 0.022, 1 - this.bodyBob * 0.018);
@@ -1457,6 +1489,121 @@ export class DaFeiYuRenderer {
     ctx.arc(-2.2, -2.2, 2.3, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
+    ctx.restore();
+  }
+
+  /**
+   * Draws two adorable 大肥鱼 chibi sailor hands wrapping flush around the vertical left/right
+   * screen edge cleanly above & below her peeking head (midY ± 72) so they never overlap her face.
+   */
+  public renderEdgePeekHands(
+    ctx: CanvasRenderingContext2D,
+    edgeX: number,
+    midY: number,
+    isLeft: boolean,
+    peekP: number,
+    now: number,
+  ): void {
+    const alpha = Math.max(0, Math.min(1, (peekP - 0.22) / 0.38));
+    if (alpha <= 0.001) return;
+
+    const dir = isLeft ? 1 : -1;
+    const slide = (1 - Math.min(1, peekP)) * 24;
+
+    ctx.save();
+    ctx.globalAlpha *= alpha;
+
+    for (const side of [-1, 1] as const) {
+      const bob = Math.sin(now * 0.0032 + (side < 0 ? 0 : Math.PI)) * 1.4;
+      const py = midY + side * 72 + bob;
+      const anchorX = edgeX - dir * slide;
+
+      ctx.save();
+      ctx.translate(anchorX, py);
+      ctx.scale(dir, 1);
+
+      // Subtle soft shadow behind the gripping chibi hand & cuff
+      ctx.fillStyle = 'rgba(26, 22, 20, 0.14)';
+      ctx.beginPath();
+      ctx.ellipse(12.8, 2.2, 10.6, 8.2, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 1) Navy sailor sleeve stub emerging from behind the vertical screen border (x = -18 .. +5.2)
+      const sleeveGrad = ctx.createLinearGradient(-18, 0, 5.2, 0);
+      sleeveGrad.addColorStop(0, '#1c1a1a');
+      sleeveGrad.addColorStop(0.55, '#262220');
+      sleeveGrad.addColorStop(1, '#332c28');
+
+      ctx.fillStyle = sleeveGrad;
+      ctx.beginPath();
+      ctx.moveTo(-18, -9.4);
+      ctx.quadraticCurveTo(-4, -10.2, 5.2, -11.4);
+      ctx.lineTo(5.2, 11.4);
+      ctx.quadraticCurveTo(-4, 10.2, -18, 9.4);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.strokeStyle = '#141211';
+      ctx.lineWidth = 2.2;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      ctx.moveTo(-18, -9.4);
+      ctx.quadraticCurveTo(-4, -10.2, 5.2, -11.4);
+      ctx.moveTo(-18, 9.4);
+      ctx.quadraticCurveTo(-4, 10.2, 5.2, 11.4);
+      ctx.stroke();
+
+      // Subtle silver sailor cuff trim + tiny gold button right inside the border edge
+      ctx.strokeStyle = 'rgba(205, 212, 232, 0.85)';
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.moveTo(2.0, -9.4);
+      ctx.lineTo(2.0, 9.4);
+      ctx.stroke();
+      ctx.fillStyle = '#e7c67b';
+      ctx.beginPath();
+      ctx.arc(2.0, 0, 1.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 2) Scalloped white ruffled lace cuff flush along the border edge
+      ctx.fillStyle = '#f8f9fe';
+      ctx.strokeStyle = '#2a2420';
+      ctx.lineWidth = 1.8;
+      for (let i = -2; i <= 2; i++) {
+        ctx.beginPath();
+        ctx.arc(6.6, i * 4.2, 4.3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
+      ctx.beginPath();
+      ctx.ellipse(6.1, 0, 3.2, 9.4, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 3) Plump round peach chibi hand gripping inward onto the screen (x ≈ +6 .. +22)
+      ctx.fillStyle = '#fde7df';
+      ctx.strokeStyle = '#3d2c35';
+      ctx.lineWidth = 2.0;
+      ctx.beginPath();
+      ctx.ellipse(14.0, 0, 8.2, 7.8, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // Soft warm blush shade on the lower curve of the plump hand
+      ctx.fillStyle = 'rgba(235, 168, 158, 0.24)';
+      ctx.beginPath();
+      ctx.ellipse(14.8, 3.0, 5.2, 2.4, 0.12, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Glossy white highlight dot
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.78)';
+      ctx.beginPath();
+      ctx.arc(12.0, -2.3, 2.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
+    }
+
     ctx.restore();
   }
 }

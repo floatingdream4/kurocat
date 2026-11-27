@@ -12,15 +12,16 @@ import {
   KUROCAT_I18N,
   applyStaticI18n,
   detectInitialLocale,
+  normalizeLocale,
   persistLocale,
   type Locale,
 } from './i18n';
 import { keyboardEventToVk } from './webKeyMap';
 import type { CollarColorId, KuroCatEngine3D } from '../../src/catEngine3d';
 
-const LOCAL_MIRROR_VERSION = 'v5.1.2';
-const LOCAL_MIRROR_VER_NUM = '5.1.2';
-const MACOS_MIRROR_VERSION = 'v5.1.2';
+const LOCAL_MIRROR_VERSION = 'v5.1.3';
+const LOCAL_MIRROR_VER_NUM = '5.1.3';
+const MACOS_MIRROR_VERSION = 'v5.1.3';
 
 let currentLocale: Locale = detectInitialLocale();
 let i18n = KUROCAT_I18N[currentLocale];
@@ -30,20 +31,36 @@ let activeReleaseAssets: ReleaseAssetMap | null = null;
 
 const WHALE_DEMO_MEDIA: Record<Locale, { video: string; poster: string }> = {
   zh: {
-    video: '/kurocat/media/whale-douyin-14s.mp4',
-    poster: '/kurocat/assets/whale-douyin-poster.webp',
+    video: '/media/whale-douyin-14s.mp4',
+    poster: '/assets/whale-douyin-poster.webp',
   },
   en: {
-    video: '/kurocat/media/whale-douyin-14s-en.mp4',
-    poster: '/kurocat/assets/whale-douyin-poster-en.webp',
+    video: '/media/whale-douyin-14s-en.mp4',
+    poster: '/assets/whale-douyin-poster-en.webp',
   },
   ja: {
-    video: '/kurocat/media/whale-douyin-14s-ja.mp4',
-    poster: '/kurocat/assets/whale-douyin-poster-ja.webp',
+    video: '/media/whale-douyin-14s-ja.mp4',
+    poster: '/assets/whale-douyin-poster-ja.webp',
   },
   ko: {
-    video: '/kurocat/media/whale-douyin-14s-ko.mp4',
-    poster: '/kurocat/assets/whale-douyin-poster-ko.webp',
+    video: '/media/whale-douyin-14s-ko.mp4',
+    poster: '/assets/whale-douyin-poster-ko.webp',
+  },
+  es: {
+    video: '/media/whale-douyin-14s-es.mp4',
+    poster: '/assets/whale-douyin-poster-es.webp',
+  },
+  pt: {
+    video: '/media/whale-douyin-14s-pt.mp4',
+    poster: '/assets/whale-douyin-poster-pt.webp',
+  },
+  ru: {
+    video: '/media/whale-douyin-14s-ru.mp4',
+    poster: '/assets/whale-douyin-poster-ru.webp',
+  },
+  de: {
+    video: '/media/whale-douyin-14s-de.mp4',
+    poster: '/assets/whale-douyin-poster-de.webp',
   },
 };
 
@@ -83,15 +100,15 @@ interface ReleaseAssetMap {
 }
 
 function buildDefaultAssets(): ReleaseAssetMap {
-  const localBase = `/kurocat/releases/${LOCAL_MIRROR_VERSION}`;
-  const ghBase = `https://github.com/qianyiai/kurocat/releases/download/${LOCAL_MIRROR_VERSION}`;
-  const macLocalBase = `/kurocat/releases/${MACOS_MIRROR_VERSION}`;
-  const macGhBase = `https://github.com/qianyiai/kurocat/releases/download/${MACOS_MIRROR_VERSION}`;
+  const localBase = `/releases/${LOCAL_MIRROR_VERSION}`;
+  const ghBase = `https://github.com/qianyiai/KuroCat/releases/download/${LOCAL_MIRROR_VERSION}`;
+  const macLocalBase = `/releases/${MACOS_MIRROR_VERSION}`;
+  const macGhBase = `https://github.com/qianyiai/KuroCat/releases/download/${MACOS_MIRROR_VERSION}`;
   const n65 = `KuroCat-${LOCAL_MIRROR_VER_NUM}-x64-setup.exe`;
   const nMac = `KuroCat-${MACOS_MIRROR_VERSION}-macos-universal.dmg`;
   return {
-    win65: { name: n65, primaryUrl: `${localBase}/${n65}`, ghUrl: `${ghBase}/${n65}`, sizeText: '2.15 MB' },
-    macos: { name: nMac, primaryUrl: `${macLocalBase}/${nMac}`, ghUrl: `${macGhBase}/${nMac}`, sizeText: '5.96 MB' },
+    win65: { name: n65, primaryUrl: `${localBase}/${n65}`, ghUrl: `${ghBase}/${n65}`, sizeText: '2.40 MB' },
+    macos: { name: nMac, primaryUrl: `${macLocalBase}/${nMac}`, ghUrl: `${macGhBase}/${nMac}`, sizeText: '6.57 MB' },
   };
 }
 
@@ -152,8 +169,22 @@ function formatCount(n: number): string {
   return Math.max(0, Math.floor(n)).toLocaleString('en-US');
 }
 
+let bestObservedStars = 0;
+
+function renderHeroStars(stars: number): void {
+  if (typeof stars !== 'number' || !Number.isFinite(stars) || stars <= 0) return;
+  bestObservedStars = Math.max(bestObservedStars, Math.floor(stars));
+  const sep = document.getElementById('github-stats-sep');
+  const txt = document.getElementById('github-stats-text');
+  if (sep && txt) {
+    sep.style.display = '';
+    txt.style.display = '';
+    txt.textContent = `★ ${formatCount(bestObservedStars)} Stars`;
+  }
+}
+
 function refreshLiveDownloadStats(): void {
-  void fetch('/kurocat/api/stats', { cache: 'no-cache' })
+  void fetch('/api/stats', { cache: 'no-cache' })
     .then((r) => (r.ok ? (r.json() as Promise<LiveStatsPayload>) : null))
     .then((data) => {
       if (!data) return;
@@ -208,9 +239,9 @@ function initDownloadTracking(): void {
       const body = JSON.stringify({ filename, version });
       try {
         if (navigator.sendBeacon) {
-          navigator.sendBeacon('/kurocat/api/track-outbound', new Blob([body], { type: 'application/json' }));
+          navigator.sendBeacon('/api/track-outbound', new Blob([body], { type: 'application/json' }));
         } else {
-          void fetch('/kurocat/api/track-outbound', {
+          void fetch('/api/track-outbound', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body,
@@ -229,20 +260,14 @@ async function syncGithubMetadata(): Promise<void> {
   const timer = window.setTimeout(() => controller.abort(), 4500);
   try {
     const [repoRes, relRes] = await Promise.all([
-      fetch('https://api.github.com/repos/qianyiai/kurocat', { signal: controller.signal }),
-      fetch('https://api.github.com/repos/qianyiai/kurocat/releases/latest', { signal: controller.signal }),
+      fetch('https://api.github.com/repos/qianyiai/KuroCat', { signal: controller.signal }),
+      fetch('https://api.github.com/repos/qianyiai/KuroCat/releases/latest', { signal: controller.signal }),
     ]);
 
     if (repoRes.ok) {
       const repo = await repoRes.json();
       if (typeof repo.stargazers_count === 'number') {
-        const sep = document.getElementById('github-stats-sep');
-        const txt = document.getElementById('github-stats-text');
-        if (sep && txt) {
-          sep.style.display = '';
-          txt.style.display = '';
-          txt.textContent = `★ ${repo.stargazers_count} Stars`;
-        }
+        renderHeroStars(repo.stargazers_count);
       }
     }
 
@@ -1159,20 +1184,6 @@ function initMcpCodeTabs(): void {
       });
     });
   });
-  // Donate EVM address copy
-  const donateBtn = document.getElementById('copy-donate-btn');
-  const donateAddrEl = document.getElementById('donate-evm-addr');
-  if (donateBtn && donateAddrEl) {
-    donateBtn.addEventListener('click', () => {
-      const addr = (donateAddrEl.textContent || '0x40995b4c9ad8cd4356417a34ab94fa20d5844617').trim();
-      navigator.clipboard.writeText(addr).then(() => {
-        donateBtn.textContent = i18n.fmt.copied();
-        window.setTimeout(() => {
-          donateBtn.textContent = i18n.text['donate.copy'] || i18n.fmt.copyShort();
-        }, 1600);
-      });
-    });
-  }
 }
 
 function initPolish(): void {
@@ -1207,11 +1218,45 @@ function initPolish(): void {
 }
 
 function initLanguageSwitcher(): void {
-  document.querySelectorAll<HTMLButtonElement>('[data-lang]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const lang = btn.dataset.lang;
-      if (lang === 'zh' || lang === 'en' || lang === 'ja' || lang === 'ko') {
+  const dropdown = document.getElementById('lang-dropdown');
+  const trigger = document.getElementById('lang-trigger');
+
+  const setOpen = (open: boolean) => {
+    if (!dropdown || !trigger) return;
+    dropdown.classList.toggle('open', open);
+    trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (!open && dropdown.contains(document.activeElement)) {
+      (document.activeElement as HTMLElement | null)?.blur();
+    }
+  };
+
+  if (trigger && dropdown) {
+    trigger.addEventListener('click', (e) => {
+      e.stopPropagation();
+      setOpen(!dropdown.classList.contains('open'));
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!dropdown.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && dropdown.classList.contains('open')) {
+        setOpen(false);
+      }
+    });
+  }
+
+  document.querySelectorAll<HTMLElement>('[data-lang]').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      e.preventDefault();
+      const lang = normalizeLocale(btn.dataset.lang);
+      if (lang) {
         setLocale(lang, true);
+        setOpen(false);
       }
     });
   });
@@ -1479,13 +1524,7 @@ function initGrowthChart(): void {
   const syncHeroGrowthMeta = () => {
     if (!cachedSeries) return;
     if (typeof cachedSeries.stars === 'number' && cachedSeries.stars > 0) {
-      const stSep = document.getElementById('github-stats-sep');
-      const stTxt = document.getElementById('github-stats-text');
-      if (stSep && stTxt) {
-        stSep.style.display = '';
-        stTxt.style.display = '';
-        stTxt.textContent = `★ ${formatCount(cachedSeries.stars)} Stars`;
-      }
+      renderHeroStars(cachedSeries.stars);
     }
     if (typeof cachedSeries.total_downloads === 'number' && cachedSeries.total_downloads > 0) {
       const dlSep = document.getElementById('site-dl-sep');
@@ -1500,7 +1539,7 @@ function initGrowthChart(): void {
 
   const refresh = async () => {
     try {
-      const res = await fetch('/kurocat/api/growth', { cache: 'no-store' });
+      const res = await fetch('/api/growth', { cache: 'no-store' });
       if (!res.ok) return;
       const data = (await res.json()) as GrowthSeries;
       if (data && Array.isArray(data.points) && data.points.length > 0) {
@@ -1520,10 +1559,59 @@ function initGrowthChart(): void {
 
   void refresh();
   window.setInterval(() => {
-    void refresh();
-  }, 60_000);
+    if (!document.hidden) void refresh();
+  }, 30_000);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) void refresh();
+  });
 }
 
+const OFFICIAL_ALERT_DISMISS_KEY = 'kurocat_official_alert_dismissed_v1';
+
+function initOfficialAlertBar(): void {
+  const bar = document.getElementById('official-alert-bar');
+  const closeBtn = document.getElementById('official-alert-close');
+  if (!bar || !closeBtn) return;
+
+  try {
+    if (localStorage.getItem(OFFICIAL_ALERT_DISMISS_KEY) === '1') {
+      document.documentElement.classList.add('official-alert-dismissed');
+      bar.hidden = true;
+      return;
+    }
+  } catch {
+    // Ignore storage errors in restricted contexts
+  }
+
+  closeBtn.addEventListener('click', () => {
+    try {
+      localStorage.setItem(OFFICIAL_ALERT_DISMISS_KEY, '1');
+    } catch {
+      // Ignore storage errors in restricted contexts
+    }
+
+    const prefersReduced =
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    if (prefersReduced) {
+      document.documentElement.classList.add('official-alert-dismissed');
+      bar.hidden = true;
+      return;
+    }
+
+    bar.style.maxHeight = `${bar.scrollHeight}px`;
+    requestAnimationFrame(() => {
+      bar.classList.add('is-closing');
+    });
+    window.setTimeout(() => {
+      document.documentElement.classList.add('official-alert-dismissed');
+      bar.hidden = true;
+    }, 230);
+  });
+}
+
+initOfficialAlertBar();
 applyReleaseUI(LOCAL_MIRROR_VERSION, buildDefaultAssets());
 initDownloadTracking();
 initPlayground();
