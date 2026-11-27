@@ -389,4 +389,19 @@ export const DEFAULT_BUILTIN_CATS: CatSkinConfig[] = [
     accentColor: '#5cc8ff',
     accentSideColor: '#2563eb',
   },
+  {
+    id: 'dafeiyu-orange',
+    name: '橙色大肥鱼',
+    emoji: '🐳',
+    builtin: true,
+    furColor: '#c9642a',
+    eyeColorTop: '#8a4416',
+    accentColor: '#ff9a52',
+    accentSideColor: '#c9642a',
+  },
 ];
+
+/** Skin ids drawn by the BigFish renderer instead of the cat: the original blue one and the orange variant. */
+export function isBigFishBreed(id: string | null | undefined): boolean {
+  return id === 'dafeiyu' || id === 'dafeiyu-orange';
+}

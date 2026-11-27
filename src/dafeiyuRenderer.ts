@@ -2,6 +2,24 @@ import idleUrl from './assets/dafeiyu/notail_idle.png';
 import blinkUrl from './assets/dafeiyu/notail_blink.png';
 import shyUrl from './assets/dafeiyu/notail_shy.png';
 import happyUrl from './assets/dafeiyu/notail_happy2.png';
+import orangeIdleUrl from './assets/dafeiyu/orange/notail_idle.png';
+import orangeBlinkUrl from './assets/dafeiyu/orange/notail_blink.png';
+import orangeShyUrl from './assets/dafeiyu/orange/notail_shy.png';
+import orangeHappyUrl from './assets/dafeiyu/orange/notail_happy2.png';
+import orangeCuriousUrl from './assets/dafeiyu/orange/notail_curious.png';
+import orangeSleepUrl from './assets/dafeiyu/orange/notail_sleep.png';
+import orangeWatchUrl from './assets/dafeiyu/orange/notail_watch.png';
+import orangeAngryUrl from './assets/dafeiyu/orange/notail_angry.png';
+import orangePanicUrl from './assets/dafeiyu/orange/notail_panic.png';
+import orangeYawnUrl from './assets/dafeiyu/orange/notail_yawn.png';
+import orangeReadUrl from './assets/dafeiyu/orange/notail_read.png';
+import orangeTeaUrl from './assets/dafeiyu/orange/notail_tea.png';
+import orangeTsunUrl from './assets/dafeiyu/orange/notail_tsun.png';
+import colaUrl from './assets/dafeiyu/orange/prop_cola.png';
+import popcornUrl from './assets/dafeiyu/orange/prop_popcorn.png';
+import headsetUrl from './assets/dafeiyu/orange/prop_headset.png';
+import bookUrl from './assets/dafeiyu/orange/prop_book.png';
+import teacupUrl from './assets/dafeiyu/orange/prop_teacup.png';
 
 type DaFeiYuExpr =
   | 'idle'
@@ -111,6 +129,57 @@ const CLASSIC_SKIN: DaFeiYuSkin = {
     sleeveShadow: 'rgba(24, 26, 46, 0.14)',
   },
 };
+
+/** Orange BigFish (橙色大肥鱼): recolored frames plus dedicated frames for every expression and pastime. */
+const ORANGE_SKIN: DaFeiYuSkin = {
+  frames: {
+    idle: orangeIdleUrl,
+    blink: orangeBlinkUrl,
+    shy: orangeShyUrl,
+    happy: orangeHappyUrl,
+    curious: orangeCuriousUrl,
+    sleep: orangeSleepUrl,
+    watch: orangeWatchUrl,
+    angry: orangeAngryUrl,
+    panic: orangePanicUrl,
+    yawn: orangeYawnUrl,
+    read: orangeReadUrl,
+    tea: orangeTeaUrl,
+    tsun: orangeTsunUrl,
+  },
+  props: { cola: colaUrl, popcorn: popcornUrl, book: bookUrl, teacup: teacupUrl, headset: headsetUrl },
+  isHairPixel: (r, g, b) => r - b > 70 || (r < 125 && g < 120 && b < 165),
+  pal: {
+    irisBase: '#46240f',
+    iris: ['#542a10', '#8a4416', '#e08a3c', '#ffd9a0', '#e0b080'],
+    irisGlow: 'rgba(255, 214, 150, 0.62)',
+    pupil: 'rgba(70, 30, 8, 0.92)',
+    pupilCore: 'rgba(46, 18, 4, 0.96)',
+    lashShadow: 'rgba(64, 28, 14, 0.40)',
+    ink: '#3a2418',
+    sleepZ: '#fff4e1',
+    waitMark: '#ff7a45',
+    curiousMark: '#ffb866',
+    ripple: '#ffb866',
+    heart: '🧡',
+    confetti: ['#ff9a52', '#ffd37a', '#fff4e1', '#f2a25a', '#ff7a6b', '#8fd3a8'],
+    tailShadow: 'rgba(88, 40, 16, 0.22)',
+    tailStem: ['rgba(70, 34, 16, 0.92)', '#7a3a12', '#c9642a', '#f2a25a'],
+    tailOutline: '#3a2418',
+    tailHighlight: 'rgba(255, 226, 180, 0.48)',
+    fluke: ['#ffe0b0', '#f2a25a', '#c9642a', '#7a3a12'],
+    flukeOutline: '#3a2418',
+    flukeHighlight: 'rgba(255, 240, 215, 0.65)',
+    flukeShine: 'rgba(255, 244, 225, 0.55)',
+    sleeve: ['#1c1a1a', '#262220', '#332c28'],
+    sleeveOutline: '#141211',
+    cuffOutline: '#2a2420',
+    sleeveShadow: 'rgba(26, 22, 20, 0.14)',
+  },
+};
+
+export type DaFeiYuSkinId = 'classic' | 'orange';
+const SKINS: Record<DaFeiYuSkinId, DaFeiYuSkin> = { classic: CLASSIC_SKIN, orange: ORANGE_SKIN };
 
 export interface DaFeiYuLayout {
   logicalW: number;
@@ -338,6 +407,19 @@ export class DaFeiYuRenderer {
   /** True when the current skin has a dedicated frame for `expr` (not just a fallback). */
   private hasFrame(expr: DaFeiYuExpr): boolean {
     return Boolean(this.skin.frames[expr]);
+  }
+
+  /** Switch between BigFish sprite sets; the old images are released and the new ones load lazily. */
+  public setSkin(id: DaFeiYuSkinId): void {
+    const next = SKINS[id] ?? CLASSIC_SKIN;
+    if (next === this.skin) return;
+    this.releaseSprites();
+    this.skin = next;
+  }
+
+  /** True when the current skin can show movie mode (3D glasses and snacks). */
+  public hasMovieMode(): boolean {
+    return this.hasFrame('watch') && this.hasFrame('angry');
   }
 
   /** Movie mode needs the skin's 3D-glasses frame; without it the flag is ignored. */

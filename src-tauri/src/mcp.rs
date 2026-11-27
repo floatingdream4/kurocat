@@ -715,7 +715,7 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "switch_cat",
-            "description": "Switch the active pet displayed on the user's desktop by ID (e.g. 'black', 'ragdoll', 'dafeiyu', or any custom ID).",
+            "description": "Switch the active pet displayed on the user's desktop by ID (e.g. 'black', 'ragdoll', 'dafeiyu', 'dafeiyu-orange', or any custom ID).",
             "inputSchema": {
                 "type": "object",
                 "required": ["id"],

@@ -2,7 +2,7 @@ import './style.css';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { DEFAULT_TAIL_KEY_IDS, type KeyboardOrientation, type TailKeyMode } from './catEngine';
-import { DEFAULT_BUILTIN_CATS, type CatSkinConfig } from './catSkins';
+import { DEFAULT_BUILTIN_CATS, isBigFishBreed, type CatSkinConfig } from './catSkins';
 import type { KeyboardLayoutId } from './keyboardLayout';
 import {
   applyDomTranslations,
@@ -407,7 +407,7 @@ function syncUI(): void {
     btn.setAttribute('aria-checked', isActive ? 'true' : 'false');
   });
 
-  const isDafeiyu = settings.catBreed === 'dafeiyu';
+  const isDafeiyu = isBigFishBreed(settings.catBreed);
   const styleCardEl = document.getElementById('style-card');
   if (styleCardEl) {
     styleCardEl.classList.toggle('hidden', isDafeiyu);
@@ -852,6 +852,7 @@ async function bootstrap(): Promise<void> {
       { ...DEFAULT_BUILTIN_CATS[0], id: 'tuxedo', name: '奶牛猫', emoji: '🐄', accentColor: '#d0d7de' },
       { ...DEFAULT_BUILTIN_CATS[0], id: 'siamese', name: '暹罗猫', emoji: '☕', accentColor: '#c9a679' },
       DEFAULT_BUILTIN_CATS[2],
+      DEFAULT_BUILTIN_CATS[3],
     ];
   }
   syncUI();

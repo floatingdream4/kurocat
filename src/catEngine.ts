@@ -8,7 +8,7 @@ import {
   resolveKeyByVk,
 } from './keyboardLayout';
 import { catAudio } from './audio';
-import { resolveCustomSkin, type CatSkinConfig, type ResolvedSkin } from './catSkins';
+import { isBigFishBreed, resolveCustomSkin, type CatSkinConfig, type ResolvedSkin } from './catSkins';
 import { DaFeiYuRenderer, type DaFeiYuLayout } from './dafeiyuRenderer';
 
 export const LOGICAL_W = 420;
@@ -244,6 +244,7 @@ export class KuroCatEngine {
   private vsyncSamples = 0;
   private highRefreshHits = 0;
   private gameActive = false;
+  private mediaActive = false;
   private kbCacheCanvas: HTMLCanvasElement | null = null;
   private kbCacheKey = '';
   private lastActionAt = 0;
@@ -927,10 +928,12 @@ export class KuroCatEngine {
   }
 
   public setCatAppearance(breedId: string, skin?: CatSkinConfig | null): void {
-    if (breedId !== 'dafeiyu' && this.catBreed === 'dafeiyu') {
+    if (!isBigFishBreed(breedId) && this.catBreed === 'dafeiyu') {
       this.dafeiyu.releaseSprites();
     }
-    if (breedId === 'dafeiyu') {
+    if (isBigFishBreed(breedId)) {
+      // Both BigFish skins share one renderer; only the sprite set and palette differ
+      this.dafeiyu.setSkin(breedId === 'dafeiyu-orange' ? 'orange' : 'classic');
       this.catBreed = 'dafeiyu';
       this.customSkin = null;
       catAudio.setPurrIntensity(0);
@@ -1029,14 +1032,15 @@ export class KuroCatEngine {
       privacyTypingAt: this.privacyTypingAt,
       is108: this.keyboardLayout === '108',
       asleep: this.asleep,
+      watching: this.bigFishWatching,
       dragging: this.isDragging,
       dragVelX: this.scruffDragVelX,
       // Nodding off during the last 45s of the 5-minute idle window before BigFish falls asleep
       drowsy:
-        this.asleep
+        this.asleep || this.bigFishWatching
           ? 0
           : Math.max(0, Math.min(1, (performance.now() - this.lastInputAt - 255_000) / 45_000)),
-      idleMs: this.asleep ? 0 : performance.now() - this.lastInputAt,
+      idleMs: this.asleep || this.bigFishWatching ? 0 : performance.now() - this.lastInputAt,
       lateNight: hour >= 23 || hour < 5,
       // Afternoon tea from 15:00 to 15:30 local time
       teaTime: hour === 15 && clock.getMinutes() < 30,
@@ -1359,6 +1363,17 @@ export class KuroCatEngine {
     this.canvas.height = 0;
   }
 
+  /** Fullscreen video / slideshow in the foreground: BigFish puts on 3D glasses and snacks (skins with a movie frame only). */
+  public setMediaActive(active: boolean): void {
+    this.mediaActive = Boolean(active);
+    this.wakeAction(performance.now());
+  }
+
+  /** Movie mode is on only for a BigFish skin that has the 3D-glasses frames. */
+  private get bigFishWatching(): boolean {
+    return this.mediaActive && this.catBreed === 'dafeiyu' && this.dafeiyu.hasMovieMode();
+  }
+
   public setGameActive(active: boolean): void {
     const next = Boolean(active);
     if (next !== this.gameActive && this.catBreed === 'dafeiyu') this.wakeAction(performance.now());
@@ -1586,7 +1601,12 @@ export class KuroCatEngine {
   }
 
   private pokeAnnoy(amount: number, now: number): void {
-    if (this.catBreed === 'dafeiyu' || this.privacyMode) return;
+    if (this.catBreed === 'dafeiyu') {
+      // BigFish only gets annoyed when disturbed during a movie
+      if (this.bigFishWatching && !this.privacyMode) this.dafeiyu.disturb(amount * 1.2, now);
+      return;
+    }
+    if (this.privacyMode) return;
     this.annoy = Math.max(0, Math.min(1, this.annoy + amount));
     this.lastPokeAt = now;
   }
@@ -2027,6 +2047,7 @@ export class KuroCatEngine {
         useTail ||
         this.shouldUseTailForKey(spec, rawKeyPt, dafeiyuMouseBusy, prevAnyKeyAt, now);
       const pt = dafeiyuUseTail ? this.getTailTargetPoint(spec) : rawKeyPt;
+      if (this.bigFishWatching && !repeat && !this.privacyMode) this.dafeiyu.disturb(0.16, now);
       this.dafeiyu.onKeyDown(vk, pt, dafeiyuLayout, repeat, dafeiyuUseTail);
       if (this.showKeyBubbles) {
         const label = formatBubbleForVk(vk, spec);
@@ -2287,6 +2308,9 @@ export class KuroCatEngine {
 
   public onMouseDown(button: string): void {
     const now = performance.now();
+    if (this.catBreed === 'dafeiyu' && this.bigFishWatching && this.cursorOverCat && !this.privacyMode) {
+      this.dafeiyu.disturb(0.4, now);
+    }
     if (this.catBreed === 'dafeiyu' && button === 'left' && !this.privacyMode) {
       // Tail poke / double-click greeting (hit-tested by the BigFish renderer)
       this.dafeiyu.onPointerDown(now, this.buildDaFeiYuLayout());
@@ -2773,7 +2797,7 @@ export class KuroCatEngine {
     this.tailGlanceAmount += ((tailGlanceNow ? 1 : 0) - this.tailGlanceAmount) * (1 - Math.exp(-12 * dt));
     if (this.tailGlanceAmount < 0.004 && !tailGlanceNow) this.tailGlanceAmount = 0;
 
-    // Cats doze off after ~28s; BigFish only after 5 minutes of system-wide idle, and never while an agent keeps her curious.
+    // Cats doze off after ~28s; BigFish only after 5 minutes of system-wide idle, and never while an agent keeps her curious or a movie is playing.
     const sleepAfterMs = !isCatMode ? 300_000 : this.embedded ? 20_000 : 28_000;
     const idleMs = now - this.lastInputAt;
     const blockingSleep =
@@ -2784,7 +2808,7 @@ export class KuroCatEngine {
       this.petEnergy >= 0.15 ||
       (this.idleAct !== null && ['doze', 'yawn', 'stretch', 'groom', 'knead'].includes(this.idleAct.kind));
     if (
-      (isCatMode || !this.dafeiyu.isCurious(now)) &&
+      (isCatMode || (!this.dafeiyu.isCurious(now) && !this.bigFishWatching)) &&
       !this.privacyMode &&
       !this.asleep &&
       !blockingSleep &&

@@ -2,6 +2,10 @@ BigFish (大肥鱼 / 鲸鱼娘) sprite frames in this directory are derived excl
 from the MIT-licensed runtime pet assets of `PC2005-cloud/dsh-pet` (repackaged in
 `QCYTSN/dsh-dafeiyu` under `assets/pet/`). No restricted `legacy/` frames are used.
 
+The `orange/` frames and props (Orange BigFish / 橙色大肥鱼) are recolored and
+re-posed derivatives of those frames, with new expressions and props and a new
+apron emblem, contributed by @floatingdream4 under the same MIT License.
+
 MIT License
 
 Copyright (c) PC2005-cloud / dsh-pet contributors
