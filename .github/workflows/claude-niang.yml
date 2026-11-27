@@ -1,0 +1,105 @@
+name: Claude-niang Windows build
+
+# Builds the Windows installer of this fork on every push and publishes it as the
+# fork's latest GitHub Release, which the in-app updater (src-tauri/src/updater.rs)
+# picks up. Each build gets a version higher than the last one:
+#   <major>.<minor>.<patch * 1000 + run number>   e.g. 5.1.3 -> 5.1.3007
+
+on:
+  push:
+    branches:
+      - main
+      - 'claude-niang-*'
+    paths:
+      - 'src/**'
+      - 'src-tauri/**'
+      - 'index.html'
+      - 'menu.html'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/claude-niang.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: claude-niang-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      # Restored before the version is stamped so the cache key stays stable between builds.
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: Stamp build version
+        shell: pwsh
+        run: |
+          $conf = 'src-tauri/tauri.conf.json'
+          $base = (Get-Content $conf -Raw | ConvertFrom-Json).version
+          $p = $base.Split('.')
+          $patch = [int]$p[2] * 1000 + [int]$env:GITHUB_RUN_NUMBER
+          $ver = "$($p[0]).$($p[1]).$patch"
+
+          function Set-FirstMatch($path, $pattern, $replacement) {
+            $text = [IO.File]::ReadAllText($path)
+            $re = [regex]::new($pattern, 'Multiline')
+            if (-not $re.IsMatch($text)) { throw "version field not found in $path" }
+            [IO.File]::WriteAllText($path, $re.Replace($text, $replacement, 1))
+          }
+          Set-FirstMatch $conf '"version"\s*:\s*"[^"]+"' "`"version`": `"$ver`""
+          Set-FirstMatch 'src-tauri/Cargo.toml' '^version\s*=\s*"[^"]+"' "version = `"$ver`""
+
+          "BASE_VERSION=$base" >> $env:GITHUB_ENV
+          "BUILD_VERSION=$ver" >> $env:GITHUB_ENV
+          Write-Host "Building $ver (based on upstream $base)"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Tauri app (Windows x64 NSIS installer)
+        run: npm run tauri -- build --bundles nsis
+
+      - name: Rename Windows installer asset
+        shell: pwsh
+        run: |
+          $nsis = Get-ChildItem "src-tauri/target/release/bundle/nsis/*-setup.exe" | Select-Object -First 1
+          if (-not $nsis) { throw "NSIS installer not found" }
+          Copy-Item $nsis.FullName "KuroCat-ClaudeNiang-$env:BUILD_VERSION-x64-setup.exe"
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kurocat-claude-niang-windows-x64
+          path: KuroCat-ClaudeNiang-*-x64-setup.exe
+
+      - name: Publish as the fork's latest release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.BUILD_VERSION }}
+          target_commitish: ${{ github.sha }}
+          name: Claude-niang ${{ env.BUILD_VERSION }}
+          body: |
+            Unofficial Claude-niang build of KuroCat, based on upstream v${{ env.BASE_VERSION }}.
+            Built from `${{ github.ref_name }}` at ${{ github.sha }}.
+          draft: false
+          prerelease: false
+          make_latest: 'true'
+          files: KuroCat-ClaudeNiang-*-x64-setup.exe
