@@ -981,6 +981,8 @@ export class KuroCatEngine {
   }
 
   private buildDaFeiYuLayout(): DaFeiYuLayout {
+    const clock = new Date();
+    const hour = clock.getHours();
     const mx = this.mouseBaseX + this.mouseOffsetX;
     const my = this.mouseBaseY + this.mouseOffsetY;
     // Mouse always stays cat-facing (#92) even when keyboard faces the viewer
@@ -1026,6 +1028,20 @@ export class KuroCatEngine {
       privacyMode: this.privacyMode,
       privacyTypingAt: this.privacyTypingAt,
       is108: this.keyboardLayout === '108',
+      asleep: this.asleep,
+      dragging: this.isDragging,
+      dragVelX: this.scruffDragVelX,
+      // Nodding off during the last 45s of the 5-minute idle window before BigFish falls asleep
+      drowsy:
+        this.asleep
+          ? 0
+          : Math.max(0, Math.min(1, (performance.now() - this.lastInputAt - 255_000) / 45_000)),
+      idleMs: this.asleep ? 0 : performance.now() - this.lastInputAt,
+      lateNight: hour >= 23 || hour < 5,
+      // Afternoon tea from 15:00 to 15:30 local time
+      teaTime: hour === 15 && clock.getMinutes() < 30,
+      gaming: this.gameActive,
+      pettingAt: this.lastPetStrokeAt,
       peekAmount: Math.max(0, Math.min(1, this.peekAmount)),
     };
   }
@@ -1212,6 +1228,7 @@ export class KuroCatEngine {
   private petStrokeCount = 0;
   private lastPetMoveAt = -10000;
   private petEnergy = 0;
+  private lastPetStrokeAt = -10000;
   private squintAmount = 0;
   private earTwitchLeft = 0;
   private earTwitchRight = 0;
@@ -1343,7 +1360,9 @@ export class KuroCatEngine {
   }
 
   public setGameActive(active: boolean): void {
-    this.gameActive = Boolean(active);
+    const next = Boolean(active);
+    if (next !== this.gameActive && this.catBreed === 'dafeiyu') this.wakeAction(performance.now());
+    this.gameActive = next;
   }
 
   private computePacingTier(now: number): RenderPacingTier {
@@ -1643,6 +1662,7 @@ export class KuroCatEngine {
   /** Interactive demo trigger: immediately shows laser-pointer curious big round pupils & perked ears! */
   public triggerCuriousDemo(durationMs = 3500): void {
     const now = performance.now();
+    if (this.catBreed === 'dafeiyu') this.dafeiyu.setCurious(now + durationMs);
     this.wakeCat(now, 'gentle');
     this.wakeAt = -10000;
     this.isCross = false;
@@ -1650,6 +1670,53 @@ export class KuroCatEngine {
     this.curiousUntil = now + durationMs;
     this.curiousSpring.kick(2.4);
     this.earPerkSpring.kick(2.2);
+  }
+
+  /** AI Companion: keep BigFish in her curious pose while an agent is working / thinking / waiting. */
+  public setAgentCurious(active: boolean, ttlMs = 45_000): void {
+    if (this.catBreed !== 'dafeiyu') return;
+    const now = performance.now();
+    if (active) {
+      this.asleep = false;
+      this.dafeiyu.setCurious(now + ttlMs);
+    } else {
+      this.dafeiyu.clearCurious();
+    }
+    this.wakeAction(now);
+  }
+
+  /** AI Companion: an agent needs the user (permission prompt, question) - BigFish waves with a '!'. */
+  public setAgentWaiting(active: boolean, ttlMs = 90_000): void {
+    if (this.catBreed !== 'dafeiyu') return;
+    const now = performance.now();
+    if (active) {
+      this.asleep = false;
+      this.dafeiyu.setWaiting(now + ttlMs);
+    } else {
+      this.dafeiyu.clearWaiting();
+    }
+    this.wakeAction(now);
+  }
+
+  /** AI Companion: an agent hit an error - BigFish panics (hands on cheeks, sweat drops). */
+  public setAgentError(active: boolean, ttlMs = 6_500): void {
+    if (this.catBreed !== 'dafeiyu') return;
+    const now = performance.now();
+    if (active) {
+      this.asleep = false;
+      this.dafeiyu.setPanic(now + ttlMs);
+    } else {
+      this.dafeiyu.clearPanic();
+    }
+    this.wakeAction(now);
+  }
+
+  /** AI Companion: an agent finished - BigFish cheers with confetti. */
+  public celebrateAgentDone(): void {
+    if (this.catBreed !== 'dafeiyu') return;
+    const now = performance.now();
+    this.dafeiyu.celebrate(now);
+    this.wakeAction(now);
   }
 
   /** Interactive demo trigger: immediately shows airplane ears + 3-beat grumpy tail desk-thump! */
@@ -2220,6 +2287,10 @@ export class KuroCatEngine {
 
   public onMouseDown(button: string): void {
     const now = performance.now();
+    if (this.catBreed === 'dafeiyu' && button === 'left' && !this.privacyMode) {
+      // Tail poke / double-click greeting (hit-tested by the BigFish renderer)
+      this.dafeiyu.onPointerDown(now, this.buildDaFeiYuLayout());
+    }
     this.wakeCat(now, 'abrupt');
     this.squashSpring.kick(1.2);
     if (button === 'left') {
@@ -2405,6 +2476,7 @@ export class KuroCatEngine {
               this.nextHeartAt = Math.min(this.nextHeartAt, now + 180);
             } else {
               this.petEnergy = Math.min(1, this.petEnergy + dist * 0.015);
+              this.lastPetStrokeAt = now;
               if (this.petEnergy > 0.55) {
                 this.hadHeartyPet = true;
               }
@@ -2701,7 +2773,8 @@ export class KuroCatEngine {
     this.tailGlanceAmount += ((tailGlanceNow ? 1 : 0) - this.tailGlanceAmount) * (1 - Math.exp(-12 * dt));
     if (this.tailGlanceAmount < 0.004 && !tailGlanceNow) this.tailGlanceAmount = 0;
 
-    const sleepAfterMs = this.embedded ? 20_000 : 28_000;
+    // Cats doze off after ~28s; BigFish only after 5 minutes of system-wide idle, and never while an agent keeps her curious.
+    const sleepAfterMs = !isCatMode ? 300_000 : this.embedded ? 20_000 : 28_000;
     const idleMs = now - this.lastInputAt;
     const blockingSleep =
       scruffWanted ||
@@ -2710,7 +2783,13 @@ export class KuroCatEngine {
       chinActive ||
       this.petEnergy >= 0.15 ||
       (this.idleAct !== null && ['doze', 'yawn', 'stretch', 'groom', 'knead'].includes(this.idleAct.kind));
-    if (isCatMode && !this.privacyMode && !this.asleep && !blockingSleep && idleMs > sleepAfterMs) {
+    if (
+      (isCatMode || !this.dafeiyu.isCurious(now)) &&
+      !this.privacyMode &&
+      !this.asleep &&
+      !blockingSleep &&
+      idleMs > sleepAfterMs
+    ) {
       this.asleep = true;
       this.isCross = false;
       this.idleAct = null;
